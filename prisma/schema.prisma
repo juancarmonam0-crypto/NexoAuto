@@ -1,0 +1,915 @@
+// Dealer Digital — canonical data model.
+//
+// AUTHORITY NOTE: this schema is the single source of truth for the platform.
+// Donor repositories are inputs for ideas only; none of them owns "vehicle",
+// "customer", "lead" or "deal" truth. See docs/DONOR_AUDIT.md.
+//
+// MONEY NOTE: every monetary amount is stored as an INTEGER of US cents.
+// Never floats. Never Decimal. Deterministic arithmetic lives in src/lib/economics.ts.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Migrations use the direct (non-pooled) connection; the app uses the pooled
+  // one. Both default to the same value when pooling is not used.
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// Staff roles. Capability matrix lives in src/lib/auth/roles.ts.
+enum UserRole {
+  OWNER
+  MANAGER
+  SALES
+  RECON
+  VIEWER
+}
+
+enum VehicleStatus {
+  SOURCING
+  PURCHASED
+  IN_TRANSIT
+  INSPECTION
+  RECONDITIONING
+  READY
+  LISTED
+  RESERVED
+  SOLD
+  DELIVERED
+  WHOLESALE
+  REJECTED
+}
+
+enum ListingStatus {
+  UNLISTED
+  ACTIVE
+  PAUSED
+  SOLD
+  ARCHIVED
+}
+
+enum TitleStatus {
+  UNKNOWN
+  CLEAN
+  SALVAGE
+  REBUILT
+  FLOOD
+  LEMON
+  BONDED
+  PARTS_ONLY
+}
+
+enum AcquisitionSource {
+  AUCTION
+  DEALER_TRADE
+  PRIVATE_PARTY
+  WHOLESALE
+  CONSIGNMENT
+  CUSTOMER_TRADE_IN
+  OTHER
+}
+
+enum VehicleDataOrigin {
+  REAL
+  DEMO
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFYING
+  APPOINTMENT
+  NEGOTIATING
+  FINANCING
+  DOCUMENTS
+  WON
+  LOST
+}
+
+enum LeadSource {
+  WEBSITE_INQUIRY
+  PHONE
+  WALK_IN
+  REFERRAL
+  MARKETPLACE
+  TRADE_IN
+  AUCTION
+  REPEAT_CUSTOMER
+  OTHER
+}
+
+enum ContactMethod {
+  PHONE
+  EMAIL
+  TEXT
+  ANY
+}
+
+enum LeadActivityType {
+  NOTE
+  CALL
+  EMAIL
+  TEXT
+  APPOINTMENT
+  STATUS_CHANGE
+  TASK
+  DOCUMENT
+}
+
+enum DealStatus {
+  OPEN
+  NEGOTIATING
+  PENDING_DOCUMENTS
+  PENDING_FINANCE
+  CONTRACTED
+  DELIVERED
+  CANCELLED
+  LOST
+}
+
+enum FinanceType {
+  CASH
+  FINANCE
+  LEASE
+  BUY_HERE_PAY_HERE
+  UNDECIDED
+}
+
+/// Texas / webDEALER boundary. We record staff-reported progress only.
+/// This application never submits anything to TxDMV or webDEALER.
+enum OfficialWorkflowStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  READY_TO_SUBMIT
+  SUBMITTED_EXTERNALLY
+  COMPLETED
+  REJECTED
+  NOT_APPLICABLE
+}
+
+enum ReservationStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  CONVERTED
+  CANCELLED
+  REFUNDED
+}
+
+enum ReconStatus {
+  ESTIMATED
+  APPROVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+/// Deliberately EXCLUDES acquisition-block costs (auction fee, transport,
+/// inspection, recon, purchase price) because those have exactly one home:
+/// the Vehicle acquisition fields and the VehicleReconItem rows. This makes
+/// double counting structurally impossible.
+enum ExpenseCategory {
+  PARTS
+  LABOR
+  DETAIL
+  TIRES
+  GLASS
+  MECHANICAL
+  BODY
+  SUBLET
+  KEYS
+  FUEL
+  TITLE_REGISTRATION
+  FLOORPLAN_INTEREST
+  ADVERTISING
+  SOFTWARE
+  LOT_RENT
+  UTILITIES
+  INSURANCE
+  PROFESSIONAL_FEES
+  MISC
+}
+
+enum DocumentType {
+  BUYER_ORDER
+  PURCHASE_AGREEMENT
+  ODOMETER_DISCLOSURE
+  TITLE_APPLICATION
+  TITLE_COPY
+  FINANCE_AGREEMENT
+  INSURANCE_PROOF
+  ID_VERIFICATION
+  INSPECTION_REPORT
+  TRADE_IN_APPRAISAL
+  RESERVATION_AGREEMENT
+  DMV_FEE_RECEIPT
+  OTHER
+}
+
+enum DocumentStatus {
+  PENDING
+  RECEIVED
+  VERIFIED
+  SENT_FOR_SIGNATURE
+  SIGNED
+  REJECTED
+  EXPIRED
+}
+
+enum SourcingSource {
+  MANUAL_ENTRY
+  PASTED_URL
+  AUCTION_FEED
+  MARKETPLACE_API
+  TRADE_IN_SUBMISSION
+  AUCTION_PURCHASE
+  OTHER
+}
+
+enum SourcingCandidateStatus {
+  INBOX
+  EVALUATING
+  APPROVED_TO_BUY
+  PASSED
+  PURCHASED
+  ARCHIVED
+}
+
+enum SourcingRecommendation {
+  BUY
+  WATCH
+  PASS
+}
+
+enum TestDriveStatus {
+  REQUESTED
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum TaskStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TrackerStatus {
+  NOT_INSTALLED
+  UNKNOWN
+  ONLINE
+  OFFLINE
+  ERROR
+}
+
+// ---------------------------------------------------------------------------
+// Staff, sessions, audit
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         UserRole @default(SALES)
+  isActive     Boolean  @default(true)
+  phone        String?
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions           Session[]
+  statusEvents       VehicleStatusEvent[]
+  leadActivities     LeadActivity[]
+  assignedLeads      Lead[]
+  deals              Deal[]              @relation("DealSalesperson")
+  tasks              Task[]              @relation("TaskAssignee")
+  createdTasks       Task[]              @relation("TaskCreator")
+  documentsUploaded  DealDocument[]
+  sourcingCandidates SourcingCandidate[] @relation("CandidateCreatedBy")
+  sourcingDecisions  SourcingCandidate[] @relation("CandidateDecidedBy")
+  auditLogs          AuditLog[]
+
+  @@index([role])
+  @@map("users")
+}
+
+/// Server-side session. The cookie holds a random token; we store only its
+/// SHA-256 hash so a database leak cannot be replayed as a live session.
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  userAgent String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorLabel String?
+  action     String
+  entityType String
+  entityId   String?
+  summary    String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Canonical vehicle
+// ---------------------------------------------------------------------------
+
+model Vehicle {
+  id          String @id @default(cuid())
+  vin         String @unique
+  stockNumber String @unique
+
+  // Identity / specification
+  year          Int
+  make          String
+  model         String
+  trim          String?
+  mileage       Int
+  exteriorColor String?
+  interiorColor String?
+  transmission  String?
+  drivetrain    String?
+  engine        String?
+  fuelType      String?
+  bodyType      String?
+  doors         Int?
+  seats         Int?
+  titleStatus   TitleStatus @default(UNKNOWN)
+
+  // Lifecycle
+  status        VehicleStatus     @default(SOURCING)
+  listingStatus ListingStatus     @default(UNLISTED)
+  dataOrigin    VehicleDataOrigin @default(REAL)
+  location      String?
+  notes         String?           @db.Text
+  description   String?           @db.Text
+  features      String[]          @default([])
+
+  // Acquisition block. These five fields plus VehicleReconItem are the ONLY
+  // homes for acquisition cost. Never duplicate them into Expense.
+  acquisitionSource      AcquisitionSource?
+  acquisitionDate        DateTime?
+  acquisitionPriceCents  Int               @default(0)
+  auctionFeesCents       Int               @default(0)
+  transportationCents    Int               @default(0)
+  inspectionCents        Int               @default(0)
+  otherAcquisitionCents  Int               @default(0)
+  /// Optional staff override. When null the engine computes recon cost from
+  /// the recon items, which is the normal path.
+  reconOverrideCents     Int?
+
+  // Pricing
+  targetRetailPriceCents Int?
+  askingPriceCents       Int?
+  minimumApprovedCents   Int?
+
+  // Listing / sale outcomes
+  dateListed   DateTime?
+  dateSold     DateTime?
+  finalSalePriceCents Int?
+
+  // Optional GPS (never required to sell, never public)
+  trackerDeviceId     String?
+  trackerStatus       TrackerStatus   @default(NOT_INSTALLED)
+  trackerLastLatitude  Float?
+  trackerLastLongitude Float?
+  trackerLastSeenAt    DateTime?
+  trackerGeofenceState String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  photos           VehiclePhoto[]
+  reconItems       VehicleReconItem[]
+  expenses         Expense[]
+  statusEvents     VehicleStatusEvent[]
+  reservations     Reservation[]
+  deals            Deal[]
+  leads            Lead[]
+  testDrives       TestDriveRequest[]
+  savedBy          SavedVehicle[]
+  documents        DealDocument[]
+  tradeInForDeals  Deal[]              @relation("DealTradeIn")
+  sourcingCandidate SourcingCandidate?
+
+  @@index([status])
+  @@index([listingStatus])
+  @@index([make, model])
+  @@index([year])
+  @@index([askingPriceCents])
+  @@index([mileage])
+  @@index([acquisitionDate])
+  @@index([trackerDeviceId])
+  @@map("vehicles")
+}
+
+model VehiclePhoto {
+  id           String   @id @default(cuid())
+  vehicleId    String
+  url          String
+  storagePath  String?
+  alt          String?
+  sortOrder    Int      @default(0)
+  isPrimary    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, sortOrder])
+  @@map("vehicle_photos")
+}
+
+model VehicleStatusEvent {
+  id          String        @id @default(cuid())
+  vehicleId   String
+  fromStatus  VehicleStatus?
+  toStatus    VehicleStatus
+  note        String?
+  changedById String?
+  createdAt   DateTime      @default(now())
+
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  changedBy User?   @relation(fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId, createdAt])
+  @@map("vehicle_status_events")
+}
+
+/// Reconditioning work item. The recon component of landed cost is the sum of
+/// actualCostCents when present, otherwise estimateCents.
+model VehicleReconItem {
+  id               String      @id @default(cuid())
+  vehicleId        String
+  issue            String
+  vendor           String?
+  estimateCents    Int         @default(0)
+  actualCostCents  Int?
+  status           ReconStatus @default(ESTIMATED)
+  approvedByStaff  Boolean     @default(false)
+  startedAt        DateTime?
+  completedAt      DateTime?
+  notes            String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, status])
+  @@map("vehicle_recon_items")
+}
+
+/// Vehicle-attributable non-acquisition expense. See ExpenseCategory docs.
+model Expense {
+  id          String          @id @default(cuid())
+  vehicleId   String?
+  category    ExpenseCategory
+  amountCents Int
+  vendor      String?
+  incurredOn  DateTime
+  description String?
+  paid        Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  vehicle Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId])
+  @@index([category])
+  @@index([incurredOn])
+  @@map("expenses")
+}
+
+// ---------------------------------------------------------------------------
+// Customers, leads, deals
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id                String        @id @default(cuid())
+  firstName         String
+  lastName          String?
+  email             String?
+  phone             String?
+  preferredContact  ContactMethod @default(ANY)
+  addressLine1      String?
+  city              String?
+  state             String?
+  postalCode        String?
+  notes             String?       @db.Text
+  leadSource        LeadSource    @default(WEBSITE_INQUIRY)
+  isArchived        Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  leads        Lead[]
+  deals        Deal[]
+  reservations Reservation[]
+  tasks        Task[]
+  testDrives   TestDriveRequest[]
+  documents    DealDocument[]
+  savedVehicles SavedVehicle[]
+  sourcingCandidates SourcingCandidate[]
+
+  @@index([lastName, firstName])
+  @@index([phone])
+  @@index([email])
+  @@map("customers")
+}
+
+model Lead {
+  id              String       @id @default(cuid())
+  customerId      String
+  vehicleId       String?
+  status          LeadStatus   @default(NEW)
+  source          LeadSource   @default(WEBSITE_INQUIRY)
+  assignedToId    String?
+  summary         String?
+  lostReason      String?
+  nextFollowUpAt  DateTime?
+  lastContactedAt DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  customer   Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  vehicle    Vehicle?       @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  assignedTo User?          @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  activities LeadActivity[]
+  deals      Deal[]
+  tasks      Task[]
+
+  @@index([status])
+  @@index([customerId])
+  @@index([vehicleId])
+  @@index([assignedToId])
+  @@index([nextFollowUpAt])
+  @@map("leads")
+}
+
+model LeadActivity {
+  id         String           @id @default(cuid())
+  leadId     String
+  type       LeadActivityType
+  body       String           @db.Text
+  fromStatus LeadStatus?
+  toStatus   LeadStatus?
+  createdById String?
+  createdAt  DateTime         @default(now())
+
+  lead      Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([leadId, createdAt])
+  @@map("lead_activities")
+}
+
+model Deal {
+  id           String     @id @default(cuid())
+  vehicleId    String
+  customerId   String
+  leadId       String?
+  salespersonId String?
+  status       DealStatus @default(OPEN)
+
+  askingPriceCents     Int  @default(0)
+  negotiatedPriceCents Int?
+  salePriceCents       Int?
+  /// Dealer-added products, taxes, fees collected from the buyer. Kept
+  /// separate from vehicle gross profit so gross profit stays a vehicle metric.
+  dealerFeesCents      Int  @default(0)
+
+  financeType          FinanceType @default(UNDECIDED)
+  lenderName           String?
+  aprBasisPoints       Int?
+  termMonths           Int?
+  downPaymentCents     Int?
+  amountFinancedCents  Int?
+
+  tradeInVehicleId     String?
+  tradeInAllowanceCents Int?
+
+  saleDate     DateTime?
+  deliveryDate DateTime?
+
+  // Texas / webDEALER boundary — staff-reported progress only.
+  titleWorkStatus        OfficialWorkflowStatus @default(NOT_STARTED)
+  registrationStatus     OfficialWorkflowStatus @default(NOT_STARTED)
+  officialNotes          String?                @db.Text
+
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vehicle     Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  customer    Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  lead        Lead?       @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  salesperson User?       @relation("DealSalesperson", fields: [salespersonId], references: [id], onDelete: SetNull)
+  tradeInVehicle Vehicle? @relation("DealTradeIn", fields: [tradeInVehicleId], references: [id], onDelete: SetNull)
+  documents   DealDocument[]
+  reservations Reservation[]
+
+  @@index([status])
+  @@index([vehicleId])
+  @@index([customerId])
+  @@index([saleDate])
+  @@map("deals")
+}
+
+model Reservation {
+  id             String            @id @default(cuid())
+  vehicleId      String
+  customerId     String
+  dealId         String?
+  status         ReservationStatus @default(PENDING)
+  depositCents   Int               @default(0)
+  depositRefundable Boolean        @default(true)
+  /// Set when the deposit is actually collected. This MVP records intent and
+  /// configuration only — it does not move money.
+  depositCollectedAt DateTime?
+  expiresAt      DateTime?
+  cancelledAt    DateTime?
+  notes          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  vehicle  Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  deal     Deal?    @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId, status])
+  @@index([customerId])
+  @@index([status])
+  @@map("reservations")
+}
+
+model TestDriveRequest {
+  id            String          @id @default(cuid())
+  vehicleId     String
+  customerId    String?
+  contactName   String
+  contactPhone  String
+  contactEmail  String?
+  preferredDate DateTime?
+  preferredTime String?
+  status        TestDriveStatus @default(REQUESTED)
+  notes         String?         @db.Text
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  vehicle  Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId])
+  @@index([status])
+  @@index([preferredDate])
+  @@map("test_drive_requests")
+}
+
+model SavedVehicle {
+  id         String   @id @default(cuid())
+  vehicleId  String
+  /// Anonymous visitors are keyed by a random cookie value; identified
+  /// customers are keyed by customerId. Exactly one is set.
+  visitorKey String?
+  customerId String?
+  createdAt  DateTime @default(now())
+
+  vehicle  Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([vehicleId, visitorKey])
+  @@unique([vehicleId, customerId])
+  @@index([customerId])
+  @@map("saved_vehicles")
+}
+
+// ---------------------------------------------------------------------------
+// Documents (deal / customer / vehicle)
+// ---------------------------------------------------------------------------
+
+model DealDocument {
+  id           String         @id @default(cuid())
+  type         DocumentType
+  status       DocumentStatus @default(PENDING)
+  title        String
+  dealId       String?
+  customerId   String?
+  vehicleId    String?
+  fileName     String
+  fileUrl      String
+  storagePath  String?
+  mimeType     String
+  sizeBytes    Int
+  /// True for documents generated by this application from stored data.
+  generated    Boolean        @default(false)
+  templateKey  String?
+  signedAt     DateTime?
+  signatureName String?
+  uploadedById String?
+  expiresAt    DateTime?
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  deal       Deal?     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  vehicle    Vehicle?  @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  uploadedBy User?     @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([dealId])
+  @@index([customerId])
+  @@index([vehicleId])
+  @@index([type, status])
+  @@map("deal_documents")
+}
+
+// ---------------------------------------------------------------------------
+// Sourcing / acquisition intelligence
+// ---------------------------------------------------------------------------
+
+/// One acquisition-candidate model for the sourcing inbox AND trade-in intake.
+/// Nothing here promises a value to a customer; trade-in figures are internal.
+model SourcingCandidate {
+  id     String                  @id @default(cuid())
+  source SourcingSource
+  status SourcingCandidateStatus @default(INBOX)
+
+  // Identity when known
+  vin   String?
+  year  Int?
+  make  String?
+  model String?
+  trim  String?
+  mileage Int?
+
+  // Where it came from
+  listingUrl      String?
+  listingTitle    String?
+  sellerName      String?
+  sellerPhone     String?
+  sellerEmail     String?
+  sellerType      String?
+  location        String?
+  notes           String?  @db.Text
+
+  // Trade-in intake specifics
+  customerId            String?
+  conditionNotes        String?  @db.Text
+  photoUrls             String[] @default([])
+  customerExpectedValueCents Int?
+  drivable              Boolean?
+
+  // Evaluation inputs
+  askingPriceCents        Int  @default(0)
+  expectedAuctionFeesCents Int @default(0)
+  transportEstimateCents   Int @default(0)
+  estimatedReconCents      Int @default(0)
+  otherCostsCents          Int @default(0)
+  estimatedRetailCents     Int  @default(0)
+  minGrossProfitCents      Int  @default(0)
+  minRoiBasisPoints        Int  @default(0)
+
+  // Deterministic evaluation snapshot (recomputed whenever inputs change).
+  evaluatedAt              DateTime?
+  landedCostCents          Int?
+  expectedProfitCents      Int?
+  expectedRoiBasisPoints   Int?
+  maxPurchasePriceCents    Int?
+  maxBidCents              Int?
+  recommendation           SourcingRecommendation?
+  recommendationReasons    String[] @default([])
+
+  createdById  String?
+  decidedById  String?
+  decidedAt    DateTime?
+  decisionNotes String?  @db.Text
+  purchasedVehicleId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy User?    @relation("CandidateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  decidedBy User?    @relation("CandidateDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  customer  Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  purchasedVehicle Vehicle? @relation(fields: [purchasedVehicleId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([source])
+  @@index([recommendation])
+  @@index([createdAt])
+  @@map("sourcing_candidates")
+}
+
+// ---------------------------------------------------------------------------
+// Tasks & settings
+// ---------------------------------------------------------------------------
+
+model Task {
+  id           String       @id @default(cuid())
+  title        String
+  description  String?      @db.Text
+  status       TaskStatus   @default(OPEN)
+  priority     TaskPriority @default(MEDIUM)
+  dueAt        DateTime?
+  completedAt  DateTime?
+  assignedToId String?
+  createdById  String?
+  customerId   String?
+  leadId       String?
+  dealId       String?
+  vehicleId    String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  assignedTo User?     @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy  User?     @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lead       Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([status, dueAt])
+  @@index([assignedToId])
+  @@map("tasks")
+}
+
+/// Single-row dealership configuration. Financing and sourcing defaults are
+/// configuration, not fabricated offers.
+model DealerSettings {
+  id      String @id @default("singleton")
+  name    String @default("Dealer Digital")
+  tagline String @default("Quality used vehicles, honestly priced.")
+
+  addressLine1 String?
+  city         String? @default("")
+  state        String? @default("TX")
+  postalCode   String?
+  phone        String?
+  email        String?
+  websiteUrl   String?
+  logoUrl      String?
+
+  /// TxDMV dealer license number. Printed on generated documents.
+  dealerLicenseNumber String?
+  /// Free-text compliance/legal footer. Not legal advice, not a fabricated form.
+  legalDisclaimer String? @db.Text
+
+  // Financing estimator defaults (clearly labelled estimates in the UI).
+  defaultAprBasisPoints      Int @default(899)
+  defaultTermMonths          Int @default(60)
+  defaultDownPaymentCents    Int @default(200000)
+  financingEnabled           Boolean @default(true)
+
+  // Reservation policy
+  reservationEnabled         Boolean @default(true)
+  defaultDepositCents        Int     @default(50000)
+  depositRefundable          Boolean @default(true)
+  reservationHoldHours       Int     @default(72)
+
+  // Sourcing thresholds
+  minGrossProfitCents        Int @default(150000)
+  minRoiBasisPoints          Int @default(1000)
+
+  // Honesty switch: when true the UI shows a "demo data" banner so seeded
+  // inventory can never be mistaken for real inventory.
+  demoMode                   Boolean @default(true)
+
+  // Public content (real dealer copy only; no invented claims)
+  heroHeadline  String? @default("")
+  heroSubtext   String? @default("")
+  aboutText     String? @db.Text
+
+  updatedAt DateTime @updatedAt
+}

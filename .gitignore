@@ -1,0 +1,45 @@
+# ---- Node / Next ----
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# ---- Local npm cache (kept in-repo so installs stay inside the workspace) ----
+.npm-cache/
+
+# ---- Secrets: never commit ----
+# `.env` covers the base file; `.env.*` covers every environment variant
+# (.env.local, .env.development, .env.staging, .env.production, ...).
+# The negation keeps the documented template tracked.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+.secrets/
+credentials.json
+service-account*.json
+
+# ---- Uploads (local dev storage; production uses object storage) ----
+/var/uploads/
+/uploads/
+
+# ---- Generated Prisma client ----
+src/generated/
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# ---- Test output ----
+coverage/
+.vitest/
