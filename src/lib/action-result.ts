@@ -1,5 +1,5 @@
 import { ZodError } from "zod";
-import { AuthorizationError } from "@/lib/auth/guards";
+import { AuthorizationError } from "@/lib/auth/errors";
 
 /**
  * Typed result for every server action and public form handler.

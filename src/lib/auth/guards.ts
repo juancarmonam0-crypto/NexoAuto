@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import type { UserRole } from "@/generated/prisma";
+import { AuthorizationError } from "@/lib/auth/errors";
 import { getCurrentUser, type SessionUser } from "@/lib/auth/session";
 import {
   type Capability,
@@ -21,13 +22,11 @@ import {
  * A missing session NEVER falls through to data access.
  */
 
-export class AuthorizationError extends Error {
-  readonly code = "UNAUTHORIZED";
-  constructor(message = "You do not have permission to perform this action.") {
-    super(message);
-    this.name = "AuthorizationError";
-  }
-}
+/** Re-exported so existing imports of AuthorizationError from this module keep
+ * working. The class itself lives in the leaf module ./errors so that
+ * client-importable code can reference it without pulling in server-only
+ * dependencies. */
+export { AuthorizationError };
 
 export interface StaffContext {
   user: SessionUser;
