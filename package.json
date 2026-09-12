@@ -5,7 +5,7 @@
   "description": "Dealer Digital - automated used-car dealership platform (inventory, economics, CRM, deals)",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -16,6 +16,11 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "node --experimental-strip-types prisma/seed.ts"
+  },
+  "allowScripts": {
+    "@prisma/client@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "prisma@6.19.3": true
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
