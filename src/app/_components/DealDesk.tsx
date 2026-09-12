@@ -24,9 +24,12 @@ import {
   completeVehicleSaleAction,
   evaluateDealStructuresAction,
   fitPaymentBudgetAction,
+  recommendCustomerOfferAction,
   solveTargetPaymentAction,
 } from "@/app/actions/sales";
 import type {
+  CustomerOfferContract,
+  CustomerOfferOptionContract,
   DealComparisonContract,
   DealPricingContract,
   DealStructureContract,
@@ -39,12 +42,12 @@ import { type DealPaymentMode } from "@/lib/deal-structuring";
 import { centsToDecimalString, formatBasisPoints, formatCents } from "@/lib/money";
 
 /**
- * THE DEAL DESK — three ways in, one engine underneath.
+ * THE DEAL DESK — four ways in, one engine underneath.
  *
  * THE PRODUCT PRINCIPLE: BACKEND SOPHISTICATED, CALCULATOR SIMPLE.
  * A normal operator needs four things — the vehicle, how it is paid, the down
  * payment and the term. Everything else is optional and lives behind the
- * "Advanced" disclosure in every path. The three paths are:
+ * "Advanced" disclosure in every path. The four paths are:
  *
  *   1 · CALCULATE DEAL        the staged workflow (vehicle → buyer → price →
  *                             payment mode → terms → comparison → finalize)
@@ -52,6 +55,10 @@ import { centsToDecimalString, formatBasisPoints, formatCents } from "@/lib/mone
  *                             solver, searched on the server
  *   3 · FIT A PAYMENT BUDGET   "the customer has $2,000 down and can pay $375 —
  *                             what actually fits?"
+ *   4 · MAKE CUSTOMER OFFER    the SELL side, face-to-face: "what is the best
+ *                             deal Nexo can offer this customer?" — derived from
+ *                             the same economic floor, with an ACCEPT / ADJUST /
+ *                             REJECT verdict computed on the server.
  *
  * Only the selected path is mounted, so its ids are unique in the document.
  *
@@ -67,7 +74,11 @@ import { centsToDecimalString, formatBasisPoints, formatCents } from "@/lib/mone
  *     here certifies that a deal is legal.
  *   - It is not an underwriting or affordability decision. `FIT A PAYMENT
  *     BUDGET` answers one mathematical question across the modes and terms the
- *     operator allows; it never judges a customer.
+ *     operator allows; it never judges a customer. `MAKE CUSTOMER OFFER` reads
+ *     only the numbers the customer STATES — a down payment and a maximum
+ *     payment — and reports which structures fit them while preserving the
+ *     dealership's configured economics. No income, debt, credit or bureau data
+ *     exists anywhere in this component or the engine behind it.
  *   - It does not invent documents or contracts (see the PHASE 9B/9C GAP note on
  *     the server page that renders this workbench).
  *
@@ -113,10 +124,11 @@ const PAYMENT_FREQUENCIES = ["MONTHLY", "SEMIMONTHLY", "BIWEEKLY", "WEEKLY"] as 
 const PREFERRED_CONTACT = ["PHONE", "EMAIL", "TEXT", "ANY"] as const;
 
 /**
- * The three ways into the desk.
+ * The four ways into the desk.
  *
- * Exactly three, defaulting to the first, rendered as one compact segmented
- * control: a path is a lens on the same deal, not a separate application.
+ * Exactly four, defaulting to the first, rendered as one compact segmented
+ * control that wraps on a phone: a path is a lens on the same deal, not a
+ * separate application.
  */
 const PATH_OPTIONS = [
   { id: "workflow", label: "CALCULATE DEAL", hint: "The staged deal workflow, start to finish." },
@@ -129,6 +141,11 @@ const PATH_OPTIONS = [
     id: "budget",
     label: "FIT A PAYMENT BUDGET",
     hint: "State the most the customer can pay per period and read what mathematically fits.",
+  },
+  {
+    id: "offer",
+    label: "MAKE CUSTOMER OFFER",
+    hint: "The sell side, for the desk in front of a customer: the customer's down payment and top payment in, one recommended structure and the server's ACCEPT / ADJUST / REJECT verdict out.",
   },
 ] as const;
 
@@ -212,6 +229,18 @@ function isFinancedMode(mode: DealPaymentMode): boolean {
   return FINANCED_MODES.includes(mode);
 }
 
+/**
+ * A payment-mode string the SERVER chose, recognised as one of the engine's own
+ * five modes.
+ *
+ * This is a vocabulary check, never a conversion: the offer engine returns the
+ * same `DealPaymentMode` strings the desk already uses, and a value outside that
+ * closed set is refused rather than coerced into a mode the engine never chose.
+ */
+function isDealPaymentMode(value: string): value is DealPaymentMode {
+  return MODE_OPTIONS.some((option) => option.mode === value);
+}
+
 /* -------------------------------------------------------------------------- */
 /* The shared deal draft                                                       */
 /* -------------------------------------------------------------------------- */
@@ -287,11 +316,18 @@ type DraftPatch = Partial<Omit<DealDraft, "mode">> & { mode?: DealPaymentMode };
 
 type OnDraftChange = (patch: DraftPatch) => void;
 
-/** The two figures an option can carry into the staged workflow. */
+/** The figures an option can carry into the staged workflow. */
 interface CarrySeed {
   mode: DealPaymentMode;
   termMonths: number;
   downPaymentCents: number;
+  /**
+   * The sale price the server priced this structure at. Optional so the two
+   * pre-existing calculators carry exactly what they always carried; the offer
+   * path supplies it, because a recommended STRUCTURE is a price as well as a
+   * term.
+   */
+  salePriceCents?: number;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -666,6 +702,10 @@ export function DealDesk({
   const [budgetResult, setBudgetResult] = useState<PaymentBudgetResultContract | null>(null);
   const [budgetError, setBudgetError] = useState<string | null>(null);
 
+  /* ---- path 4: make a customer offer (the sell side) ---------------------- */
+  const [offerResult, setOfferResult] = useState<CustomerOfferContract | null>(null);
+  const [offerError, setOfferError] = useState<string | null>(null);
+
   const vehicleLocked = selectedVehicleId !== null;
   const hasVehicle = draft.vehicleId !== "";
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === draft.vehicleId) ?? null;
@@ -723,16 +763,63 @@ export function DealDesk({
   }
 
   /**
+   * PATH 4 — the customer offer, ONE call, run entirely on the server.
+   *
+   * The form is read once into a `FormData` and handed over whole: the engine
+   * derives the economic floor, prices every allowed term against the customer's
+   * stated budget and returns the verdict itself. Nothing is computed here and
+   * nothing is stored anywhere.
+   */
+  function handleMakeOffer(formData: FormData) {
+    setOfferError(null);
+    startTransition(async () => {
+      const result = await recommendCustomerOfferAction(formData);
+      if (result.ok && result.data) {
+        setOfferResult(result.data);
+      } else {
+        setOfferResult(null);
+        setOfferError(result.ok ? "The server returned no offer for these numbers." : result.error);
+      }
+    });
+  }
+
+  /**
+   * APPLY TO DEAL — copy the RECOMMENDED structure the server chose into the
+   * staged workflow's own inputs.
+   *
+   * A state copy of the server's own figures, never a recomputation: the mode it
+   * recommended, its term, its down payment and the sale price it priced at. The
+   * desk then switches to CALCULATE DEAL so the operator can carry on through the
+   * existing staged workflow. Nothing is saved, contracted or sent anywhere.
+   */
+  function applyRecommendedOffer(result: CustomerOfferContract) {
+    const recommended = result.recommended;
+    if (!recommended) return;
+    carryOption({
+      mode: isDealPaymentMode(result.mode) ? result.mode : draft.mode,
+      termMonths: recommended.termMonths,
+      downPaymentCents: result.downPaymentCents,
+      salePriceCents: recommended.salePriceCents,
+    });
+  }
+
+  /**
    * Carry a server-computed option into the staged workflow.
    *
-   * CLIENT STATE ONLY, and no arithmetic: the down payment the engine reached is
-   * echoed straight back into the input as a plain decimal string.
+   * CLIENT STATE ONLY, and no arithmetic: the down payment and the sale price the
+   * engine reached are echoed straight back into the inputs as plain decimal
+   * strings. The desk lands on TERMS, which is the step immediately after the
+   * PAYMENT MODE the carry has just filled in, so the operator continues forward
+   * through the existing staged workflow.
    */
   function carryOption(seed: CarrySeed) {
     updateDraft({
       mode: seed.mode,
       termMonths: String(seed.termMonths),
       downPayment: centsToDecimalString(seed.downPaymentCents),
+      ...(seed.salePriceCents === undefined
+        ? {}
+        : { sellingPrice: centsToDecimalString(seed.salePriceCents) }),
     });
     setStep(4);
     setPath("workflow");
@@ -740,14 +827,14 @@ export function DealDesk({
 
   return (
     <div className="space-y-4">
-      {/* PATH SELECTOR — a compact segmented control: three stacked rows with
-          44px targets on a phone, one row from the sm breakpoint up. */}
+      {/* PATH SELECTOR — a compact segmented control: four stacked rows with 40px
+          targets on a phone, one wrapping row from the sm breakpoint up. */}
       <nav aria-label="Calculator path" className={cardClass}>
         <p className={labelClass}>What are you solving for?</p>
         <div
           role="group"
           aria-label="Calculator path"
-          className="mt-2 inline-flex w-full flex-col gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 sm:w-auto sm:flex-row"
+          className="mt-2 inline-flex w-full flex-col gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 sm:w-auto sm:flex-row sm:flex-wrap"
         >
           {PATH_OPTIONS.map((option) => {
             const isCurrent = option.id === path;
@@ -757,7 +844,7 @@ export function DealDesk({
                 type="button"
                 aria-pressed={isCurrent}
                 onClick={() => setPath(option.id)}
-                className={`inline-flex min-h-[40px] flex-1 items-center justify-center rounded-md px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wider transition-colors sm:flex-none ${
+                className={`inline-flex min-h-[40px] flex-1 items-center justify-center rounded-md px-3 py-1.5 text-center font-mono text-[11px] font-semibold uppercase tracking-wider transition-colors sm:flex-none ${
                   isCurrent
                     ? "bg-slate-900 text-white"
                     : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
@@ -819,6 +906,20 @@ export function DealDesk({
           canSeeFinance={canSeeFinance}
           onCalculate={handleFitBudget}
           onCarry={carryOption}
+        />
+      ) : null}
+
+      {path === "offer" ? (
+        <OfferPath
+          vehicles={vehicles}
+          draft={draft}
+          updateDraft={updateDraft}
+          result={offerResult}
+          error={offerError}
+          pending={pending}
+          canSeeFinance={canSeeFinance}
+          onCalculate={handleMakeOffer}
+          onApply={applyRecommendedOffer}
         />
       ) : null}
     </div>
@@ -2441,26 +2542,626 @@ function BudgetOptionCard({
 }
 
 /* ========================================================================== */
+/* PATH 4 · MAKE CUSTOMER OFFER (the sell side)                                */
+/* ========================================================================== */
+
+/**
+ * "The customer has $2,500 down and wants to stay near $420 a month. What can we
+ * offer?"
+ *
+ * THE MINIMAL FORM IS THE POINT. This path is used standing at a desk next to a
+ * customer on a phone, so the visible form is four things: the vehicle, the
+ * payment mode the customer wants, what they can put down and the most they say
+ * they can pay. Everything else — a negotiated price, the rate, the frequency,
+ * the terms allowed, the fees, the tax, the trade-in and the lease fields — lives
+ * in the same collapsed Advanced disclosure the other calculators use.
+ *
+ * ONE CALL. `FIND BEST DEAL` hands the whole form to
+ * `recommendCustomerOfferAction` once; the engine derives the economic floor,
+ * prices every allowed term, ranks the survivors and returns the verdict. No
+ * figure on the panel below is computed in the browser.
+ *
+ * WHAT IT IS NOT: not underwriting, not a credit decision, not an affordability
+ * judgement and not lender approval. The customer STATES two numbers and the
+ * server says which structures fit them while preserving the dealership's
+ * configured economics.
+ */
+function OfferPath({
+  vehicles,
+  draft,
+  updateDraft,
+  result,
+  error,
+  pending,
+  canSeeFinance,
+  onCalculate,
+  onApply,
+}: {
+  vehicles: DealDeskVehicle[];
+  draft: DealDraft;
+  updateDraft: OnDraftChange;
+  result: CustomerOfferContract | null;
+  error: string | null;
+  pending: boolean;
+  canSeeFinance: boolean;
+  onCalculate: (formData: FormData) => void;
+  onApply: (result: CustomerOfferContract) => void;
+}) {
+  const mode = draft.mode;
+
+  return (
+    <section aria-label="Make customer offer" className="space-y-4">
+      {/* ONE <form>, ONE submission: everything the server reads lives inside it. */}
+      <form
+        className={`${cardClass} space-y-5`}
+        onSubmit={(event) => {
+          event.preventDefault();
+          onCalculate(new FormData(event.currentTarget));
+        }}
+      >
+        <header className="space-y-1">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-900">Make customer offer</h2>
+          <p className="text-xs leading-relaxed text-slate-500">
+            Four answers are enough: the vehicle, how the customer wants to pay, what they can put down and
+            the most they can pay a month. The server derives the dealership&apos;s minimum acceptable
+            price, finds the best structure that fits both numbers, and returns its own verdict.
+          </p>
+        </header>
+
+        <VehicleSelect
+          id="desk-offer-vehicleId"
+          vehicles={vehicles}
+          value={draft.vehicleId}
+          onChange={(value) => updateDraft({ vehicleId: value })}
+          hint="The asking price, the cost basis and the days in inventory come from the vehicle record. The offer engine offers at the asking price unless you type a negotiated price below."
+        />
+
+        <fieldset className="space-y-2">
+          <legend className={labelClass}>Payment mode</legend>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {MODE_OPTIONS.map((option) => {
+              const checked = option.mode === mode;
+              return (
+                <label
+                  key={option.mode}
+                  htmlFor={`desk-offer-mode-${option.mode}`}
+                  className={`flex min-h-[44px] cursor-pointer items-start gap-2 rounded-lg border p-3 transition-colors ${
+                    checked ? "border-orange-500 bg-orange-50" : "border-slate-300 bg-white hover:bg-slate-50"
+                  }`}
+                >
+                  <input
+                    id={`desk-offer-mode-${option.mode}`}
+                    type="radio"
+                    name="mode"
+                    value={option.mode}
+                    checked={checked}
+                    onChange={() => updateDraft({ mode: option.mode })}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-orange-600"
+                  />
+                  <span className="min-w-0 space-y-0.5">
+                    <span className="block font-mono text-[11px] font-bold uppercase tracking-wider text-slate-900">
+                      {option.label}
+                    </span>
+                    <span className="block text-[11px] leading-relaxed text-slate-600">{option.hint}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          <p className="text-[11px] leading-relaxed text-slate-500">
+            A CASH offer is structured too: it simply has no periodic payment, so the payment target below
+            is not what decides it.
+          </p>
+        </fieldset>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <TextField
+            id="desk-offer-downPayment"
+            name="downPayment"
+            label="Customer down payment ($)"
+            placeholder="0.00"
+            value={draft.downPayment}
+            onChange={(value) => updateDraft({ downPayment: value })}
+            hint="Type 0 when the customer is putting nothing down — a literal zero is sent as zero, not treated as blank."
+          />
+          <TextField
+            id="desk-offer-maxPayment"
+            name="maxPayment"
+            label="Most the customer can pay per month ($)"
+            placeholder="420.00"
+            hint="The customer's own stated ceiling. The server checks every candidate against it and reports which ones fit."
+          />
+        </div>
+
+        {/* The negotiated price is worth being in the open: it is the one number a
+            salesperson changes mid-conversation. It stays OPTIONAL, and only
+            `proposedSalePrice` is sent, because the offer engine takes the vehicle's
+            asking price as its ceiling unless the operator proposes a different one. */}
+        <TextField
+          id="desk-offer-proposedSalePrice"
+          name="proposedSalePrice"
+          label="Negotiated sale price, if you have one ($)"
+          placeholder="from the vehicle"
+          value={draft.sellingPrice}
+          onChange={(value) => updateDraft({ sellingPrice: value })}
+          hint="Leave blank to offer at the vehicle's asking price. The server refuses to price below the dealership's economic minimum, whatever you type here."
+        />
+
+        <AdvancedDealFields
+          idPrefix="desk-offer"
+          draft={draft}
+          updateDraft={updateDraft}
+          summary="Advanced · rate, allowed terms, frequency, fees, tax, trade-in and lease terms"
+        >
+          {/* The terms this offer may use — the one Advanced input the offer engine
+              reads that the other two calculators do not have. */}
+          <fieldset className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+            <legend className={labelClass}>Terms this offer may use (months)</legend>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {OFFER_TERM_OPTIONS.map((term) => (
+                <label
+                  key={term}
+                  htmlFor={`desk-offer-term-${term}`}
+                  className="flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 transition-colors hover:bg-slate-50"
+                >
+                  <input
+                    id={`desk-offer-term-${term}`}
+                    type="checkbox"
+                    name="allowedTerms"
+                    value={String(term)}
+                    defaultChecked
+                    className="h-4 w-4 shrink-0 accent-orange-600"
+                  />
+                  <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-slate-900">
+                    {term}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <p className="text-[11px] leading-relaxed text-slate-500">
+              The server searches every ticked term and ranks what fits. Untick all of them and it falls
+              back to its own standard set.
+            </p>
+          </fieldset>
+        </AdvancedDealFields>
+
+        <button type="submit" disabled={pending || draft.vehicleId === ""} className={primaryButtonClass}>
+          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Handshake className="h-4 w-4 text-orange-400" />}
+          <span>{pending ? "Working out the best offer…" : "Find best deal"}</span>
+        </button>
+        <p className="text-[11px] leading-relaxed text-slate-500">
+          One request, read-only: the server prices every allowed term against these two numbers, holds the
+          dealership&apos;s economic floor, and returns its own verdict. It stores nothing, applies nothing
+          and approves nothing — no credit, income or lender data is involved, because none exists here.
+        </p>
+      </form>
+
+      {error ? <ErrorNotice message={error} /> : null}
+
+      {result ? (
+        <OfferResultPanel result={result} canSeeFinance={canSeeFinance} onApply={onApply} />
+      ) : null}
+    </section>
+  );
+}
+
+/** The terms the offer form lets an operator allow, shortest first. */
+const OFFER_TERM_OPTIONS = [12, 24, 36, 42, 48, 60, 72, 84] as const;
+
+/**
+ * THE RESULT — the offer as a salesperson would read it out loud.
+ *
+ * Order is deliberate: the verdict, then the ONE recommended structure, then the
+ * two explicit checks, then why, then everything else. `OFFER_VERDICT_VARIANTS`
+ * only maps the server's own verdict string onto a colour; the words shown are
+ * always the server's `verdictLabel`.
+ */
+function OfferResultPanel({
+  result,
+  canSeeFinance,
+  onApply,
+}: {
+  result: CustomerOfferContract;
+  canSeeFinance: boolean;
+  onApply: (result: CustomerOfferContract) => void;
+}) {
+  const recommended = result.recommended;
+  const variant = OFFER_VERDICT_VARIANTS[result.verdict] ?? "neutral";
+
+  return (
+    <div className="space-y-4" aria-live="polite">
+      {/* THE VERDICT — never invented here, never softened here. */}
+      <div
+        className={`space-y-3 rounded-xl border-2 p-4 ${
+          variant === "success"
+            ? "border-emerald-300 bg-emerald-50"
+            : variant === "warning"
+              ? "border-amber-300 bg-amber-50"
+              : variant === "danger"
+                ? "border-rose-300 bg-rose-50"
+                : "border-slate-300 bg-slate-50"
+        }`}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge status={result.verdictLabel} variant={variant} size="md" />
+          <StatusBadge status={result.modeLabel} variant="neutral" size="sm" />
+        </div>
+        <p className="text-base font-bold leading-snug tracking-tight text-slate-900 sm:text-lg">
+          {recommended
+            ? `${formatCents(recommended.salePriceCents)} at ${recommended.termMonths} months · ${formatCents(recommended.paymentAmountCents)} per period`
+            : result.verdictLabel}
+        </p>
+        <p className="text-xs leading-relaxed text-slate-600">
+          {result.maxPaymentCents === null
+            ? "No maximum payment was stated, so the payment target does not constrain this offer."
+            : `Judged against the customer's stated maximum of ${formatCents(result.maxPaymentCents)} per period and the dealership's own economic floor.`}
+        </p>
+        <EchoLine
+          title={result.echo.vehicleTitle}
+          asOfIso={result.echo.asOfIso}
+          jurisdiction={result.echo.jurisdiction}
+        />
+      </div>
+
+      {/* THE RECOMMENDED STRUCTURE — one card, read top to bottom. */}
+      {recommended ? (
+        <div className="space-y-4 rounded-xl border-2 border-orange-300 bg-orange-50 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge status="RECOMMENDED" variant="orange" size="md" />
+            <p className="text-sm font-bold tracking-tight text-slate-900">
+              {result.modeLabel} · {recommended.termMonths} months · {recommended.numberOfPayments} payments
+            </p>
+          </div>
+
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+            <Figure label="Sale price" value={formatCents(recommended.salePriceCents)} />
+            <Figure label="Down payment" value={formatCents(recommended.downPaymentCents)} />
+            <Figure label="Amount financed" value={formatCents(recommended.amountFinancedCents)} />
+            <Figure
+              label="Term"
+              value={`${recommended.termMonths} months · ${recommended.numberOfPayments} payments`}
+            />
+            <Figure label="APR" value={formatBasisPoints(recommended.aprBasisPoints, 2)} />
+            <Figure
+              label={`Payment every ${frequencyWord(result.paymentFrequency)}`}
+              value={formatCents(recommended.paymentAmountCents)}
+              accent
+            />
+          </dl>
+
+          {/* VEHICLE GROSS AND PROJECTED FINANCE INCOME — TWO SEPARATE LINES,
+              ALWAYS. They are never added together and never called "profit"
+              anywhere on this screen, because the engine keeps them apart. */}
+          <div className="space-y-2 border-t border-orange-200 pt-3">
+            <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="min-w-0">
+                <dt className="font-mono text-[10px] uppercase tracking-wider text-slate-500 sm:text-[11px]">
+                  Vehicle gross
+                </dt>
+                <dd className="break-words font-mono text-sm font-semibold text-slate-900">
+                  {formatCents(recommended.vehicleGrossCents, { fallback: "Hidden" })}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="font-mono text-[10px] uppercase tracking-wider text-slate-500 sm:text-[11px]">
+                  Projected finance income
+                </dt>
+                <dd className="break-words font-mono text-sm font-semibold text-slate-900">
+                  {formatCents(recommended.projectedFinanceIncomeCents)}
+                </dd>
+              </div>
+            </dl>
+            <p className="text-[11px] leading-relaxed text-slate-600">
+              Two separate figures on purpose. Vehicle gross is the margin on the vehicle; projected
+              finance income is a separate revenue stream that the server never adds to it. There is no
+              combined profit figure on this screen.
+            </p>
+          </div>
+
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-orange-200 pt-3 sm:grid-cols-3">
+            <Figure
+              label="Cash received today"
+              value={formatCents(recommended.dealerCashReceivedAtClosingCents)}
+            />
+            <Figure
+              label="Nexo capital exposed"
+              value={formatCents(recommended.dealerCapitalStillExposedCents)}
+            />
+            <Figure
+              label="Return on Nexo capital"
+              value={
+                recommended.vehicleRoiBasisPoints === null
+                  ? "Hidden"
+                  : formatBasisPoints(recommended.vehicleRoiBasisPoints, 2)
+              }
+            />
+            <Figure label="Finance charge on the contract" value={formatCents(recommended.financeChargeCents)} />
+            <Figure label="Total customer outlay" value={formatCents(recommended.totalCustomerOutlayCents)} />
+            <Figure label="Rate policy (the server's own wording)" value={recommended.ratePolicyStatement} mono={false} />
+          </dl>
+
+          {/* THE TWO CHECKS — the server's booleans, stated as the server's facts. */}
+          <div className="space-y-2 border-t border-orange-200 pt-3">
+            <OfferCheckLine
+              ok={recommended.fitsPaymentTarget}
+              text={`FITS PAYMENT TARGET${
+                result.maxPaymentCents === null
+                  ? " (no maximum payment was stated)"
+                  : ` — customer target ${formatCents(result.maxPaymentCents)}/${frequencyWord(result.paymentFrequency)}`
+              }`}
+            />
+            <OfferCheckLine
+              ok={recommended.meetsEconomicFloor}
+              text={
+                recommended.meetsEconomicFloor
+                  ? `MEETS MINIMUM MARGIN${floorSuffix(result.minimumSalePriceCents)}`
+                  : "MEETS MINIMUM MARGIN — not verified at or above the dealership's economic floor"
+              }
+            />
+            <p className="text-[11px] leading-relaxed text-slate-600">
+              These are the server&apos;s own checks, not a judgement about the customer.
+            </p>
+          </div>
+
+          <ReasonList items={recommended.structure.reasons} title="Why this structure" />
+          <RiskLabels labels={recommended.structure.riskLabels} />
+
+          <CarryButton
+            label="Apply to deal"
+            icon={<Handshake className="h-3.5 w-3.5" />}
+            onClick={() => onApply(result)}
+            note="Copies the recommended mode, term, sale price and down payment into CALCULATE DEAL and switches to it. Nothing is saved or finalized — you carry on through the staged workflow yourself."
+          />
+        </div>
+      ) : (
+        <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+          The server recommended no structure for these numbers. The checks and the reasons below say why.
+        </p>
+      )}
+
+      {/* THE BLOCKERS — the server's own labels, in the server's own words.
+          The engine accumulates a blocker for EVERY candidate term it could not
+          use, so an ACCEPT can legitimately arrive with blockers attached: they
+          describe the terms that did not fit, not the recommendation. The heading
+          says which, rather than implying the recommendation is in doubt. */}
+      {result.blockerLabels.length > 0 ? (
+        <div className="space-y-2 rounded-xl border-2 border-amber-300 bg-amber-50 p-4">
+          <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-amber-900">
+            {result.verdict === "ACCEPT"
+              ? "Terms the engine could not use (the recommendation above is unaffected)"
+              : "What is in the way"}
+          </p>
+          <ul className="space-y-1">
+            {result.blockerLabels.map((label, index) => (
+              <li key={`offer-blocker-${index}`} className="flex gap-2 text-xs leading-relaxed text-amber-900">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{label}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {/* THE MINIMUM VIABLE OFFER — the ADJUST case, with its own reason verbatim. */}
+      {result.minimumViable ? (
+        <div className="space-y-3 rounded-xl border-2 border-orange-300 bg-white p-4 shadow-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge status="WHAT WOULD MAKE IT WORK" variant="orange" size="md" />
+          </div>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+            <Figure label="Down payment" value={formatCents(result.minimumViable.downPaymentCents)} accent />
+            <Figure label="Term" value={`${result.minimumViable.termMonths} months`} />
+            <Figure label="Sale price" value={formatCents(result.minimumViable.salePriceCents)} />
+            <Figure label="Amount financed" value={formatCents(result.minimumViable.amountFinancedCents)} />
+            <Figure
+              label="Resulting payment"
+              value={formatCents(result.minimumViable.paymentAmountCents)}
+              accent
+            />
+            <Figure
+              label="Vehicle gross"
+              value={formatCents(result.minimumViable.vehicleGrossCents, { fallback: "Hidden" })}
+            />
+          </dl>
+          <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-700">
+            {result.minimumViable.reason}
+          </p>
+          <p className="text-[11px] leading-relaxed text-slate-500">
+            This is the smallest change the server found, not an approval and not a promise: the customer
+            would still have to agree to it.
+          </p>
+        </div>
+      ) : null}
+
+      {/* EVERY CANDIDATE TERM — stacked rows on a phone, two columns on a wider
+          screen. A wide table would be unreadable at a desk. */}
+      {result.options.length > 0 ? (
+        <div className="space-y-3">
+          <h3 className="text-sm font-bold tracking-tight text-slate-900">Every allowed term the server costed</h3>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {result.options.map((option) => (
+              <OfferOptionCard
+                key={`offer-option-${option.termMonths}-${option.numberOfPayments}`}
+                option={option}
+                recommended={
+                  recommended !== null &&
+                  recommended.termMonths === option.termMonths &&
+                  recommended.salePriceCents === option.salePriceCents
+                }
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* THE ECONOMIC FLOOR — or an honest statement about why it is missing. */}
+      {result.pricePolicy ? (
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+          <h3 className="text-sm font-bold tracking-tight text-slate-900">The floor this offer had to clear</h3>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+            <Figure
+              label="Minimum acceptable sale price"
+              value={formatCents(result.pricePolicy.floorCents, { fallback: "Not computed" })}
+            />
+            <Figure label="Target selling price" value={formatCents(result.pricePolicy.targetCents)} />
+            <Figure label="Asking price" value={formatCents(result.askingPriceCents)} />
+            <Figure
+              label="Price offered"
+              value={formatCents(result.recommendedSalePriceCents, { fallback: "no structure recommended" })}
+            />
+            <Figure
+              label="Binding constraint"
+              value={result.pricePolicy.bindingConstraint === null ? "—" : result.pricePolicy.bindingConstraint.replace(/-/g, " ")}
+              mono={false}
+            />
+          </dl>
+          <ReasonList items={result.pricePolicy.reasons} />
+        </div>
+      ) : (
+        <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+          {canSeeFinance
+            ? "The server did not return the dealership's price floor for this vehicle."
+            : "The cost basis is not visible to your role, so the server sends no price floor and no minimum acceptable sale price. The payment maths above is still exact, but no margin figure can be confirmed here — nothing is estimated in its place."}
+        </p>
+      )}
+
+      <ReasonList items={result.reasons} title="How the server reached this" />
+      <WarningList items={result.warnings} title="Warnings" />
+    </div>
+  );
+}
+
+/** The server's verdict string onto a badge colour. The WORDS are always the server's. */
+const OFFER_VERDICT_VARIANTS: Record<string, "success" | "warning" | "danger" | "neutral"> = {
+  ACCEPT: "success",
+  ADJUST: "warning",
+  REJECT: "danger",
+};
+
+/** One of the server's two checks, stated as a fact rather than a judgement. */
+function OfferCheckLine({ ok, text }: { ok: boolean; text: string }) {
+  return (
+    <p
+      className={`flex items-start gap-2 text-xs font-semibold leading-relaxed ${
+        ok ? "text-emerald-800" : "text-amber-900"
+      }`}
+    >
+      {ok ? (
+        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+      ) : (
+        <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+      )}
+      <span>{text}</span>
+    </p>
+  );
+}
+
+/** " — floor $18,400", or nothing at all when the server sent no floor. */
+function floorSuffix(floorCents: number | null): string {
+  return floorCents === null ? "" : ` — floor ${formatCents(floorCents)}`;
+}
+
+/**
+ * The payment period in the operator's own words.
+ *
+ * A display mapping of the server's frequency string, nothing more: no rate and
+ * no payment is derived from it.
+ */
+function frequencyWord(frequency: string): string {
+  const normalized = frequency.toUpperCase();
+  if (normalized === "SEMIMONTHLY") return "half-month";
+  if (normalized === "BIWEEKLY") return "two weeks";
+  if (normalized === "WEEKLY") return "week";
+  return "month";
+}
+
+/** One candidate term, as a stacked row rather than a table cell. */
+function OfferOptionCard({
+  option,
+  recommended,
+}: {
+  option: CustomerOfferOptionContract;
+  recommended: boolean;
+}) {
+  return (
+    <article
+      className={`flex flex-col gap-3 rounded-xl border p-4 ${
+        recommended ? "border-orange-400 bg-orange-50/40" : "border-slate-200 bg-white shadow-xs"
+      }`}
+    >
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-sm font-bold tracking-tight text-slate-900">
+          {option.termMonths} months · {option.numberOfPayments} payments
+        </h4>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {recommended ? <StatusBadge status="RECOMMENDED" variant="orange" size="sm" /> : null}
+          <StatusBadge
+            status={option.fitsPaymentTarget ? "FITS" : "DOES NOT FIT"}
+            variant={option.fitsPaymentTarget ? "success" : "danger"}
+            size="sm"
+          />
+        </div>
+      </header>
+
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-200/70 pt-3">
+        <Figure label="Payment" value={formatCents(option.paymentAmountCents)} accent />
+        <Figure label="Sale price" value={formatCents(option.salePriceCents)} />
+        <Figure label="Down payment" value={formatCents(option.downPaymentCents)} />
+        <Figure label="Amount financed" value={formatCents(option.amountFinancedCents)} />
+      </dl>
+
+      {!option.meetsEconomicFloor ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+          Below minimum margin: the server did not verify this structure at or above the dealership&apos;s
+          economic floor — either the price is under it, or the cost basis is not visible to your role.
+        </p>
+      ) : null}
+
+      {!option.fitsPaymentTarget ? (
+        <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+          This term does not reach the customer&apos;s stated payment target. The figure above is the payment
+          the server actually computed for it.
+        </p>
+      ) : null}
+
+      {option.ratePolicyStatement ? (
+        <p className="font-mono text-[11px] leading-relaxed text-slate-500">
+          {option.ratePolicyStatement}
+        </p>
+      ) : null}
+    </article>
+  );
+}
+
+/* ========================================================================== */
 /* SHARED CALCULATOR PIECES                                                    */
 /* ========================================================================== */
 
 /**
- * One carry affordance, used by both calculators.
+ * One carry affordance, used by all three calculators.
  *
- * It copies the SERVER's mode, term and down payment into the staged workflow's
- * own inputs — a state copy, never a recomputation, and never a database write.
+ * It copies the SERVER's mode, term, down payment and (for the offer path) the
+ * sale price into the staged workflow's own inputs — a state copy, never a
+ * recomputation, and never a database write.
  */
-function CarryButton({ label, onClick }: { label: string; onClick: () => void }) {
+function CarryButton({
+  label,
+  onClick,
+  note = "Carries the payment mode, the term and the down payment into CALCULATE DEAL. It fills the inputs and stops there — nothing is saved.",
+  icon,
+}: {
+  label: string;
+  onClick: () => void;
+  note?: string;
+  icon?: ReactNode;
+}) {
   return (
     <div className="space-y-1 border-t border-slate-200/70 pt-3">
       <button type="button" onClick={onClick} className={tinyButtonClass}>
-        <ArrowRight className="h-3.5 w-3.5" />
+        {icon ?? <ArrowRight className="h-3.5 w-3.5" />}
         <span>{label}</span>
       </button>
-      <p className="text-[11px] leading-relaxed text-slate-500">
-        Carries the payment mode, the term and the down payment into CALCULATE DEAL. It fills the inputs
-        and stops there — nothing is saved.
-      </p>
+      <p className="text-[11px] leading-relaxed text-slate-500">{note}</p>
     </div>
   );
 }
@@ -2523,23 +3224,29 @@ function FinancedModeRadio({
 }
 
 /**
- * The collapsed "Advanced" disclosure both calculators share.
+ * The collapsed "Advanced" disclosure every calculator shares.
  *
  * Every field here is OPTIONAL: `readDealSetup` falls back to the vehicle's
  * asking price, the dealership's configured rate and term, and zero fees and
  * tax. `idPrefix` keeps the ids distinct even though only one path is ever
  * mounted.
+ *
+ * `children` renders at the END of the disclosure, still inside it, for a path
+ * that needs one extra optional control (the offer path's allowed terms) without
+ * a second disclosure. The other two paths pass nothing and are unchanged.
  */
 function AdvancedDealFields({
   idPrefix,
   draft,
   updateDraft,
   summary,
+  children,
 }: {
   idPrefix: string;
   draft: DealDraft;
   updateDraft: OnDraftChange;
   summary: string;
+  children?: ReactNode;
 }) {
   return (
     <details className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -2683,6 +3390,8 @@ function AdvancedDealFields({
             onChange={(value) => updateDraft({ ratePolicyJurisdiction: value })}
           />
         </div>
+
+        {children}
       </div>
     </details>
   );

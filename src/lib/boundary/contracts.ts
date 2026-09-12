@@ -490,3 +490,100 @@ export interface MarketAnalysisContract {
     jurisdiction: string | null;
   };
 }
+
+// ---------------------------------------------------------------------------
+// CUSTOMER OFFER ENGINE (sell side)
+//
+// The sell-side counterpart of the acquisition analysis: what Nexo can
+// responsibly OFFER a customer, given a stated down payment and maximum payment,
+// while preserving the dealership's configured economics.
+//
+// Same rules as everywhere else: integer cents, and every cost-derived field
+// nullable because the server nulls it for a role without `finance:read`. Vehicle
+// gross and projected finance income are ALWAYS separate fields — there is no
+// combined "profit" in this contract by design.
+// ---------------------------------------------------------------------------
+
+export interface CustomerOfferOptionContract {
+  termMonths: number;
+  numberOfPayments: number;
+  salePriceCents: number;
+  /** Highest sale price still fitting the target at this term; null when no target. */
+  maxSalePriceForTargetCents: number | null;
+  downPaymentCents: number;
+  amountFinancedCents: number;
+  paymentAmountCents: number;
+  financeChargeCents: number;
+  totalCustomerOutlayCents: number;
+  /** Null for a role without `finance:read`. */
+  vehicleGrossCents: number | null;
+  /** Null for a role without `finance:read`. */
+  vehicleRoiBasisPoints: number | null;
+  /** A SEPARATE revenue stream from vehicle gross; never added to it. */
+  projectedFinanceIncomeCents: number;
+  dealerCashReceivedAtClosingCents: number;
+  dealerCapitalStillExposedCents: number;
+  aprBasisPoints: number;
+  fitsPaymentTarget: boolean;
+  meetsEconomicFloor: boolean;
+  /** null = no configured rate policy, which is not the same as "within". */
+  withinRatePolicy: boolean | null;
+  ratePolicyStatus: string;
+  ratePolicyStatement: string;
+  riskLabels: string[];
+  structure: DealStructureContract;
+}
+
+export interface MinimumViableOfferContract {
+  termMonths: number;
+  salePriceCents: number;
+  downPaymentCents: number;
+  amountFinancedCents: number;
+  paymentAmountCents: number;
+  /** Null for a role without `finance:read`. */
+  vehicleGrossCents: number | null;
+  reason: string;
+}
+
+export interface CustomerOfferContract {
+  verdict: string;
+  verdictLabel: string;
+  mode: string;
+  modeLabel: string;
+
+  askingPriceCents: number;
+  /** The dealership's economic floor. Null for a role without `finance:read`. */
+  minimumSalePriceCents: number | null;
+  targetSellingPriceCents: number | null;
+  recommendedSalePriceCents: number | null;
+
+  downPaymentCents: number;
+  maxPaymentCents: number | null;
+  aprBasisPoints: number;
+  paymentFrequency: string;
+
+  recommended: CustomerOfferOptionContract | null;
+  options: CustomerOfferOptionContract[];
+  feasible: CustomerOfferOptionContract[];
+  minimumViable: MinimumViableOfferContract | null;
+
+  blockers: string[];
+  blockerLabels: string[];
+  reasons: string[];
+  warnings: string[];
+  /** Masked entirely for a role without `finance:read` (it quotes landed cost). */
+  pricePolicy: {
+    floorCents: number | null;
+    targetCents: number | null;
+    bindingConstraint: string | null;
+    reasons: string[];
+  } | null;
+
+  echo: {
+    vehicleId: string;
+    vehicleTitle: string;
+    landedCostVisible: boolean;
+    asOfIso: string;
+    jurisdiction: string | null;
+  };
+}

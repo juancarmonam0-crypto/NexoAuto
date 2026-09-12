@@ -849,4 +849,103 @@ historical migration. `0006` remains the only pending production migration.
 
 ---
 
+## SECTION 16 — CUSTOMER OFFER ENGINE V1 (the sell side)
+
+Added in the commit `feat(sales): add customer offer recommendation engine`. The
+acquisition engine answers "how much can Nexo pay?"; this answers the question an
+operator asks in front of a customer: **"what is the best deal Nexo can
+responsibly offer?"**
+
+```
+NEXO KNOWS THE MATH. THE OPERATOR DECIDES THE BUSINESS.
+```
+
+### What it is, and what it deliberately is not
+
+It is a **payment-budget fit**: the customer STATES a down payment and a maximum
+payment, and the engine reports which structures mathematically fit while
+preserving the dealership's configured economics. It is **not** underwriting, not
+a credit decision, not an affordability judgement and not lender approval. It
+reads no income, debt, credit, bureau or protected-characteristic data — no such
+field exists anywhere in this product, and none was added. No LLM produces a
+number or the verdict.
+
+### The layers
+
+| Layer | File | Responsibility |
+|---|---|---|
+| Engine | `src/lib/customer-offer.ts` | `recommendCustomerOffer()` — the deterministic sell-side policy and search. |
+| Boundary | `src/app/actions/sales.ts` → `recommendCustomerOfferAction` | Reads the vehicle's canonical economics once, runs the engine, masks per role. Read-only. |
+| UI | `src/app/_components/DealDesk.tsx` | A fourth Deal Desk path, **MAKE CUSTOMER OFFER**, with APPLY TO DEAL. |
+
+### The canonical minimum sale price
+
+Reused, never re-derived: `computeRecommendedPricing()` (the Phase 9B price ladder)
+turns landed cost plus the dealership's configured minimum gross and minimum ROI
+into a **minimum approved sale price** — the floor this engine will not go below —
+and a target price. Landed cost keeps its single canonical definition.
+
+If the cost basis is not visible to the acting role, the floor is **unknown**, and
+the engine says so instead of guessing: it will not lower a price to reach a
+monthly payment when it cannot see the floor, because doing so could breach the
+dealership's minimum invisibly. A masked role therefore gets the exact payment for
+the price it proposed, with `VEHICLE_COST_UNKNOWN` explaining what cannot be
+verified, and never an `ACCEPT`.
+
+### The search (no duplicated mathematics)
+
+For each allowed term, the engine finds the **highest sale price at or below what
+the operator proposed** whose payment still fits the customer's target, floored at
+the economic minimum — by **bisecting the canonical forward chain**
+(`computeContractAmounts` + `computeLevelPaymentCents`), the same technique the
+Phase 9 payment solver uses. There is no inverted annuity formula and no second
+amortisation implementation. Each chosen price is then costed whole by
+`structureDeal()`, and the survivors are ranked by `rankDealStructures()` — the
+same business ranking the Deal Desk uses, so the two surfaces cannot disagree.
+
+The price is never **raised** to reach a target (quoting a customer more than they
+were asked for would be nonsense); it may be **reduced** to fit one, but only down
+to the floor.
+
+### ACCEPT / ADJUST / REJECT
+
+* **ACCEPT** — the recommendation fits the customer's stated payment, is VERIFIED
+  at or above the economic floor, and is inside the configured rate policy.
+* **ADJUST** — a deal is possible but something must change. The result carries an
+  enumerated `blockers` list in the operator's words (`PAYMENT_TARGET_TOO_LOW`,
+  `DOWN_PAYMENT_TOO_LOW`, `TERM_NOT_ALLOWED`, `PRICE_BELOW_ECONOMIC_MINIMUM`,
+  `RATE_POLICY_VIOLATION`, `UNSUPPORTED_FINANCE_MODE`, `VEHICLE_COST_UNKNOWN`,
+  `NO_ALLOWED_TERMS`, `STRUCTURE_NOT_BUILDABLE`) plus a **minimum viable offer**:
+  the least extra money down that reaches the target at the floor price, with the
+  term and the resulting payment.
+* **REJECT** — reserved for structures the engine cannot build at all under the
+  current rules (an unsupported finance mode, no allowed terms). It is deliberately
+  rare: more money down mathematically reduces a payment, so the engine prefers to
+  hand the operator the exact adjustment than to refuse.
+
+### The non-negotiable separation
+
+**VEHICLE GROSS** (`sale price − canonical landed cost`) and **PROJECTED FINANCE
+INCOME** (the finance charge on the note) are separate fields on every option and
+separate lines in the UI. There is deliberately **no combined "profit"** anywhere
+in the contract or the module.
+
+**NEXO CAPITAL EXPOSED** comes from the finance engine as authority: 0 for cash,
+0 for external finance (the lender funds the balance), and the financed principal
+for a dealer-held note. No accounting semantics were invented.
+
+### AI and market data
+
+No LLM computes a price, APR, payment, term, minimum viable price, finance charge
+or verdict. Market Intelligence is not consulted when structuring a customer
+payment — the existing vehicle economics are reused as context, and no MarketCheck
+call is made from this flow.
+
+### Schema
+
+**No schema change and no migration.** The engine reuses `Vehicle`, `DealerSettings`,
+the finance engine, the price engine and the existing `FinanceType` semantics.
+
+---
+
 **NEXO AUTO PHASE 9 CANONICAL HANDOFF READY FOR REVIEW**

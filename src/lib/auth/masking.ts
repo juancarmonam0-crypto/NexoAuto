@@ -60,6 +60,12 @@ const HIDDEN_FINANCIAL_KEYS = [
   // Deal-structure economics
   "vehicleGrossCents",
   "combinedExpectedEconomicsCents",
+  // Phase: Customer Offer Engine. The offer's floor, its return and the whole
+  // price-policy block (whose reasons quote landed cost and gross) are
+  // cost-derived and must not reach a role without `finance:read`.
+  "vehicleRoiBasisPoints",
+  "minimumSalePriceCents",
+  "pricePolicy",
   // The structure score is a weighted function of the margin, so publishing it
   // would reconstruct what the margin fields withhold.
   "score",

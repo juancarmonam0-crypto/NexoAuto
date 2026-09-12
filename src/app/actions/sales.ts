@@ -7,7 +7,10 @@ import type {
   DealComparisonContract,
   DealPricingContract,
   DealRatePolicyContract,
+  CustomerOfferContract,
+  CustomerOfferOptionContract,
   DealStructureContract,
+  MinimumViableOfferContract,
   PaymentBudgetOptionContract,
   PaymentBudgetResultContract,
   SaleCompletedContract,
@@ -21,6 +24,7 @@ import {
   compareDealStructures,
   computeRecommendedPricing,
 } from "@/lib/deal-structuring";
+import { type CustomerOfferOption, DEFAULT_OFFER_TERMS_MONTHS, recommendCustomerOffer } from "@/lib/customer-offer";
 import { type PaymentFrequency, PAYMENT_FREQUENCIES } from "@/lib/finance-engine";
 import {
   enumField,
@@ -329,6 +333,8 @@ function structureContract(structure: DealStructure): DealStructureContract {
 
 interface DealSetup {
   vehicle: VehicleInventoryView;
+  /** The dealership's own configuration, read ONCE for every analysis path. */
+  settings: Awaited<ReturnType<typeof getDealerSettings>>;
   sellingPriceCents: Cents;
   asOf: Date;
   jurisdiction: string | null;
@@ -473,6 +479,7 @@ async function readDealSetup(ctx: OperationContext, formData: FormData): Promise
 
   return {
     vehicle,
+    settings,
     sellingPriceCents,
     asOf,
     jurisdiction: jurisdiction ?? null,
@@ -695,5 +702,172 @@ export async function fitPaymentBudgetAction(
         jurisdiction: setup.jurisdiction,
       },
     };
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* CUSTOMER OFFER ENGINE — the sell side                                       */
+/* -------------------------------------------------------------------------- */
+
+/** The terms an offer may use, from the form's checkboxes. */
+function allowedTermsFromForm(formData: FormData): readonly number[] {
+  const requested = formData
+    .getAll("allowedTerms")
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => Number.parseInt(value, 10))
+    .filter((value) => Number.isInteger(value) && value > 0 && value <= 180);
+  const unique = [...new Set(requested)].sort((a, b) => a - b);
+  return unique.length > 0 ? unique : DEFAULT_OFFER_TERMS_MONTHS;
+}
+
+function offerOptionContract(
+  option: CustomerOfferOption,
+  actor: { role: UserRole },
+): CustomerOfferOptionContract {
+  const structure = masked<DealStructureContract>(structureContract(option.structure), actor);
+  return masked<CustomerOfferOptionContract>(
+    {
+      termMonths: option.termMonths,
+      numberOfPayments: option.numberOfPayments,
+      salePriceCents: option.salePriceCents,
+      maxSalePriceForTargetCents: option.maxSalePriceForTargetCents,
+      downPaymentCents: option.downPaymentCents,
+      amountFinancedCents: option.amountFinancedCents,
+      paymentAmountCents: option.paymentAmountCents,
+      financeChargeCents: option.financeChargeCents,
+      totalCustomerOutlayCents: option.totalCustomerOutlayCents,
+      vehicleGrossCents: option.vehicleGrossCents,
+      vehicleRoiBasisPoints: option.vehicleRoiBasisPoints,
+      projectedFinanceIncomeCents: option.projectedFinanceIncomeCents,
+      dealerCashReceivedAtClosingCents: option.dealerCashReceivedAtClosingCents,
+      dealerCapitalStillExposedCents: option.dealerCapitalStillExposedCents,
+      aprBasisPoints: option.aprBasisPoints,
+      fitsPaymentTarget: option.fitsPaymentTarget,
+      meetsEconomicFloor: option.meetsEconomicFloor,
+      withinRatePolicy: option.withinRatePolicy,
+      ratePolicyStatus: option.ratePolicyStatus,
+      ratePolicyStatement: option.ratePolicyStatement,
+      riskLabels: option.structure.riskLabels,
+      structure,
+    },
+    actor,
+  );
+}
+
+/**
+ * MAKES A CUSTOMER OFFER — the sell-side counterpart of the acquisition engine.
+ *
+ * "The customer has $2,500 down and wants to stay near $420 a month. What can we
+ * offer?" The engine derives the dealership's minimum acceptable sale price from
+ * the EXISTING economics, finds the highest price that still fits the customer's
+ * stated payment for each allowed term, costs every candidate with the canonical
+ * structure engine, ranks them with the canonical ranking, and returns an
+ * ACCEPT / ADJUST / REJECT verdict with the exact variable that blocks the deal.
+ *
+ * NOT underwriting: the customer STATES a down payment and a maximum payment, and
+ * this answers only which structures fit those numbers while preserving the
+ * dealership's configured economics. No income, debt, credit, bureau or protected
+ * data exists anywhere in this product, and none is read here.
+ *
+ * READ-ONLY: nothing is persisted and nothing is applied to a deal. The operator
+ * reviews the recommendation and carries it into the Deal Desk deliberately.
+ *
+ * Capability: `deals:read`.
+ */
+export async function recommendCustomerOfferAction(
+  formData: FormData,
+): Promise<ActionResult<CustomerOfferContract>> {
+  return runOperation("sales.recommendCustomerOffer", async () => {
+    const ctx = await operationContext("deals:read");
+    const setup = await readDealSetup(ctx, formData);
+
+    const mode = enumField(formData, "mode", DEAL_PAYMENT_MODES, "BUY_HERE_PAY_HERE", "Payment mode");
+    const maxPaymentCents = optionalFormCents(formData, "maxPayment", "Maximum payment") ?? null;
+    const proposedSalePriceCents = optionalFormCents(formData, "proposedSalePrice", "Proposed sale price") ?? null;
+
+    const result = recommendCustomerOffer({
+      landedCostCents: setup.vehicle.landedCostCents,
+      askingPriceCents: setup.vehicle.askingPriceCents ?? setup.sellingPriceCents,
+      targetRetailPriceCents: setup.vehicle.targetRetailPriceCents,
+      minGrossProfitCents: setup.settings.minGrossProfitCents,
+      minRoiBasisPoints: setup.settings.minRoiBasisPoints,
+      daysInInventory: setup.vehicle.daysInInventory,
+      dealerFeesCents: setup.base.dealerFeesCents,
+      salesTaxBasisPoints: setup.base.salesTaxBasisPoints,
+      tradeInAllowanceCents: setup.base.tradeInAllowanceCents,
+      tradeInPayoffCents: setup.base.tradeInPayoffCents,
+      downPaymentCents: setup.base.downPaymentCents,
+      maxPaymentCents,
+      mode,
+      aprBasisPoints: setup.base.aprBasisPoints,
+      allowedTermsMonths: allowedTermsFromForm(formData),
+      proposedSalePriceCents,
+      paymentFrequency: setup.base.paymentFrequency,
+      firstPaymentDate: setup.base.firstPaymentDate,
+      lease: setup.base.lease,
+      ratePolicy: setup.base.ratePolicy,
+    });
+
+    const recommended = result.recommended === null ? null : offerOptionContract(result.recommended, ctx.actor);
+
+    return masked<CustomerOfferContract>(
+      {
+        verdict: result.verdict,
+        verdictLabel: result.verdictLabel,
+        mode: result.mode,
+        modeLabel: result.modeLabel,
+        askingPriceCents: result.askingPriceCents,
+        minimumSalePriceCents: result.minimumSalePriceCents,
+        targetSellingPriceCents: result.targetSellingPriceCents,
+        recommendedSalePriceCents: recommended?.salePriceCents ?? null,
+        downPaymentCents: result.downPaymentCents,
+        maxPaymentCents: result.maxPaymentCents,
+        aprBasisPoints: result.aprBasisPoints,
+        paymentFrequency: result.paymentFrequency,
+        recommended,
+        options: result.options.map((option) => offerOptionContract(option, ctx.actor)),
+        feasible: result.feasible.map((option) => offerOptionContract(option, ctx.actor)),
+        minimumViable:
+          result.minimumViable === null
+            ? null
+            : masked<MinimumViableOfferContract>(
+                {
+                  termMonths: result.minimumViable.termMonths,
+                  salePriceCents: result.minimumViable.salePriceCents,
+                  downPaymentCents: result.minimumViable.downPaymentCents,
+                  amountFinancedCents: result.minimumViable.amountFinancedCents,
+                  paymentAmountCents: result.minimumViable.paymentAmountCents,
+                  vehicleGrossCents: result.minimumViable.vehicleGrossCents,
+                  reason: result.minimumViable.reason,
+                },
+                ctx.actor,
+              ),
+        blockers: result.blockers,
+        blockerLabels: result.blockerLabels,
+        reasons: result.reasons,
+        warnings: result.warnings,
+        // Masked whole: its reasons quote landed cost and gross.
+        pricePolicy:
+          setup.vehicle.landedCostCents === null
+            ? null
+            : masked<NonNullable<CustomerOfferContract["pricePolicy"]>>(
+                {
+                  floorCents: result.pricePolicy.floorCents,
+                  targetCents: result.pricePolicy.targetCents,
+                  bindingConstraint: result.pricePolicy.bindingConstraint,
+                  reasons: result.pricePolicy.reasons,
+                },
+                ctx.actor,
+              ),
+        echo: {
+          vehicleId: setup.vehicle.id,
+          vehicleTitle: setupTitle(setup.vehicle),
+          landedCostVisible: setup.vehicle.landedCostCents !== null,
+          asOfIso: setup.asOf.toISOString(),
+          jurisdiction: setup.jurisdiction,
+        },
+      },
+      ctx.actor,
+    );
   });
 }
