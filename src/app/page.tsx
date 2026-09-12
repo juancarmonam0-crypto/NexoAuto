@@ -2,51 +2,43 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getPublicDealerInfo, listPublicInventory } from "@/lib/public-catalog";
 import { getPublicStrings } from "@/lib/i18n";
-import { type PublicStrings } from "@/lib/i18n";
-import {
-  BENEFITS,
-  BENEFIT_CTA_ACTION_KEY,
-  BENEFIT_CTA_BODY_KEY,
-  BENEFIT_CTA_ICON,
-  BENEFIT_CTA_TITLE_KEY,
-  BUYING_OPTIONS,
-  HERO_ASSURANCE_KEYS,
-  SECTION_IDS,
-  STEPS,
-  TRUST_POINTS,
-} from "@/lib/i18n/public-content";
+import { type PublicStrings } from "@/lib/i18n/catalog";
+import { BUYING_OPTIONS, JOURNEY_STEPS, SECTION_IDS } from "@/lib/i18n/public-content";
 import { PublicNav } from "@/app/_components/PublicNav";
 import { PublicFooter } from "@/app/_components/PublicFooter";
+import { HomeHero } from "@/app/_components/HomeHero";
 import { VehicleCard } from "@/app/_components/PublicVehicleCard";
-import { NexoFamilyNote } from "@/app/_components/brand";
-import { ArrowRight, Car, CheckCircle2, Mail, Phone } from "lucide-react";
+import { RichHeading } from "@/app/_components/RichHeading";
+import { NexoFamilyNote, NexoMark } from "@/app/_components/brand";
+import { ArrowRight, Car, Mail, Phone, ShieldCheck } from "lucide-react";
 
 /**
  * Nexo Auto — public homepage.
  *
- * Read this page top to bottom as the sales argument it is:
- *   1. what this is and one obvious next step (hero)
- *   2. why it is different (benefits)
- *   3. the actual cars (inventory preview — real data or an honest empty state)
- *   4. how the process works (four steps)
- *   5. how you can pay (cash / financing / guided structure / flexible paths)
- *   6. why to trust it (capabilities, not invented testimonials)
- *   7. what to do now (closing CTA)
+ * SECTION ORDER IS THE SALES ARGUMENT, and it follows the approved mockup:
+ *
+ *   1. HERO            approved artwork + HTML copy in its negative space
+ *   2. INVENTORY       real cars almost immediately — this is a dealership
+ *   3. JOURNEY         four short steps, not six explainer cards
+ *   4. BUYING OPTIONS  navy band: how you can pay
+ *   5. NEXO FAMILY     the brand story, kept factual
+ *   6. FOOTER          substantial and dark
+ *
+ * The previous six-card "why us" grid is gone deliberately: the mockup explains
+ * the business in four one-line steps and spends the page on cars instead.
  *
  * HONESTY RULES applied throughout: no fabricated counters, badges, reviews or
- * inventory; no claim of guaranteed approval; financing is always described as
- * an estimate. Every figure comes from `listPublicInventory`, which reads the
+ * inventory; no claim of guaranteed approval; financing is always described as an
+ * estimate. Every figure comes from `listPublicInventory`, which reads the
  * approved public views — the same boundary anonymous visitors use.
  *
- * BILINGUAL: this file holds no prose. Sections, their order, their icons and
- * their destinations come from `src/lib/i18n/public-content.ts`, and every
- * string comes from the dictionary for the request's language. A dealer's own
- * configured hero text is used in English only, because stored dealer copy is
- * not guest-translatable — the Spanish edition falls back to its own authored
- * hero rather than showing English text to a Spanish reader.
+ * The hero artwork is a marketing composition and does NOT depict the actual
+ * featured inventory, so no specification card is attached to it. Real vehicles
+ * are shown in the inventory section, where their own photographs belong.
  *
- * The `#` links in the hero and nav are in-page anchors, so the primary
- * conversion path works with zero client-side JavaScript.
+ * BILINGUAL: this file holds no prose. Every string comes from the dictionary for
+ * the request's language, and a dealer's own configured hero text is used in
+ * English only — stored dealer copy is not guest-translatable.
  */
 
 interface PageProps {
@@ -63,200 +55,57 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   };
 }
 
-/**
- * Landing content changes only when a car is listed or dealer settings change,
- * so this is cached for a few minutes instead of re-queried on every visit.
- * `getPublicStrings()` reads cookies, which keeps the render per-request anyway;
- * the inventory query is what this window actually protects.
- */
+/** Inventory and dealer settings change rarely; a short window keeps it fresh. */
 export const revalidate = 300;
-
-/** Builds the hero copy, preferring the dealer's own English text when set. */
-function heroCopy(s: PublicStrings, dealerHeadline?: string | null, dealerSubtext?: string | null) {
-  const useDealerCopy = s.language === "en";
-  return {
-    headline:
-      (useDealerCopy ? dealerHeadline?.trim() : null) || s.t("home.hero.headlineFallback"),
-    subtext: (useDealerCopy ? dealerSubtext?.trim() : null) || s.t("home.hero.subtextFallback"),
-  };
-}
 
 export default async function HomePage({ searchParams }: PageProps) {
   const params = await searchParams;
   const [s, dealer, vehicles] = await Promise.all([
     getPublicStrings({ searchParam: params.lang ?? null }),
     getPublicDealerInfo(),
-    listPublicInventory({ limit: 6 }),
+    // Exactly three, so the desktop preview is one clean row rather than a
+    // three-plus-one grid with a gap. The catalog carries the rest.
+    listPublicInventory({ limit: 3 }),
   ]);
 
   const name = dealer?.name?.trim() || s.t("meta.siteName");
   const phone = dealer?.phone?.trim() || null;
   const email = dealer?.email?.trim() || null;
-
-  const { headline, subtext } = heroCopy(s, dealer?.heroHeadline, dealer?.heroSubtext);
-  const aboutText = s.language === "en" ? dealer?.aboutText?.trim() || null : null;
+  const telHref = phone ? `tel:${phone.replace(/[^+\d]/g, "")}` : null;
   const hasInventory = vehicles.length > 0;
 
-  const telHref = phone ? `tel:${phone.replace(/[^+\d]/g, "")}` : null;
-  const BenefitCtaIcon = BENEFIT_CTA_ICON;
-
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
+    <div className="flex min-h-screen flex-col surface-page">
       <PublicNav dealerInfo={dealer} language={s.language} />
 
       <main className="flex-1">
-        <h1 className="sr-only">{s.tc("a11y.srHeadline", { name })}</h1>
+        {/* ---------------------------------------------------------------- */}
+        {/* 1. HERO — approved artwork, live HTML copy                       */}
+        {/* ---------------------------------------------------------------- */}
+        <HomeHero s={s} />
 
         {/* ---------------------------------------------------------------- */}
-        {/* B. HERO                                                          */}
+        {/* 2. INVENTORY — cars almost immediately                           */}
         {/* ---------------------------------------------------------------- */}
-        <section className="brand-panel relative overflow-hidden">
-          {/* Restrained depth: one soft accent wash, no illustration, no collage. */}
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 opacity-70"
-            style={{
-              backgroundImage:
-                "radial-gradient(60rem 30rem at 85% -10%, rgba(249,115,22,0.22), transparent 60%), radial-gradient(40rem 24rem at 0% 110%, rgba(255,255,255,0.06), transparent 65%)",
-            }}
-          />
-
-          <div className="relative mx-auto max-w-6xl px-4 pb-12 pt-10 sm:px-6 sm:pb-16 sm:pt-16">
-            <div className="max-w-3xl">
-              <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-300">
-                <Car className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span className="truncate">{name}</span>
-              </span>
-
-              <h2 className="mt-5 text-3xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl">
-                {headline}
-              </h2>
-
-              <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-300 sm:mt-5 sm:text-base">{subtext}</p>
-
-              {/* CTAs: full-width stacked on phones so both are thumb targets. */}
-              <div className="mt-7 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:items-center">
-                <Link
-                  href="/inventory"
-                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-6 text-sm font-semibold text-white shadow-lg shadow-orange-950/20 transition-colors hover:bg-orange-500 sm:w-auto"
-                >
-                  <span>{s.t("home.hero.primaryCta")}</span>
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </Link>
-
-                <Link
-                  href={`#${SECTION_IDS.howItWorks}`}
-                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/5 px-6 text-sm font-semibold text-white transition-colors hover:bg-white/10 sm:w-auto"
-                >
-                  <span>{s.t("home.hero.secondaryCta")}</span>
-                </Link>
-              </div>
-
-              {/* Capability statements, not invented metrics. */}
-              <ul className="mt-7 flex flex-col gap-2 border-t border-white/10 pt-5 text-xs text-slate-300 sm:mt-9 sm:flex-row sm:flex-wrap sm:gap-x-6 sm:gap-y-2">
-                {HERO_ASSURANCE_KEYS.map((key) => (
-                  <li key={key} className="inline-flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-orange-400" aria-hidden="true" />
-                    <span>{s.t(key)}</span>
-                  </li>
-                ))}
-              </ul>
-
-              {(phone || email) && (
-                <p className="mt-5 text-xs text-slate-400">
-                  {s.t("home.hero.preferTalk")}{" "}
-                  {phone && telHref && (
-                    <a
-                      href={telHref}
-                      className="font-semibold text-white underline decoration-orange-500/60 underline-offset-4 transition-colors hover:text-orange-300"
-                    >
-                      {s.tc("home.hero.call", { phone })}
-                    </a>
-                  )}
-                  {phone && email && <span aria-hidden="true"> · </span>}
-                  {email && (
-                    <a
-                      href={`mailto:${email}`}
-                      className="font-semibold text-white underline decoration-orange-500/60 underline-offset-4 transition-colors hover:text-orange-300"
-                    >
-                      {s.t("home.hero.email")}
-                    </a>
-                  )}
-                </p>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* ---------------------------------------------------------------- */}
-        {/* C. VALUE PROPOSITIONS                                            */}
-        {/* ---------------------------------------------------------------- */}
-        <section id={SECTION_IDS.whyNexo} className="border-b border-slate-200 bg-white">
-          <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
-            <div className="max-w-2xl">
-              <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-                {s.t("home.benefits.title")}
-              </h2>
-              <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">{s.t("home.benefits.subtitle")}</p>
-            </div>
-
-            <div className="mt-8 grid grid-cols-1 gap-4 sm:mt-10 sm:grid-cols-2 lg:grid-cols-3">
-              {BENEFITS.map((benefit) => {
-                const Icon = benefit.icon;
-                return (
-                  <div
-                    key={benefit.titleKey}
-                    className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5 transition-colors hover:border-slate-300 hover:bg-white sm:p-6"
-                  >
-                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--brand-navy-900)] text-orange-400">
-                      <Icon className="h-5 w-5" aria-hidden="true" />
-                    </span>
-                    <h3 className="mt-4 text-base font-bold tracking-tight text-slate-900">{s.t(benefit.titleKey)}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-600">{s.t(benefit.bodyKey)}</p>
-                  </div>
-                );
-              })}
-
-              {/* Fills the sixth grid cell on desktop with a concrete next step. */}
-              <div className="rounded-2xl border border-orange-200 bg-orange-50/70 p-5 sm:p-6">
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-orange-600 text-white">
-                  <BenefitCtaIcon className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <h3 className="mt-4 text-base font-bold tracking-tight text-slate-900">
-                  {s.t(BENEFIT_CTA_TITLE_KEY)}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-700">{s.t(BENEFIT_CTA_BODY_KEY)}</p>
-                <Link
-                  href="/inventory"
-                  className="mt-4 inline-flex h-11 items-center gap-1.5 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
-                >
-                  <span>{s.t(BENEFIT_CTA_ACTION_KEY)}</span>
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </Link>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ---------------------------------------------------------------- */}
-        {/* D. FEATURED INVENTORY                                            */}
-        {/* ---------------------------------------------------------------- */}
-        <section id={SECTION_IDS.inventory} className="bg-slate-50">
-          <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+        <section id={SECTION_IDS.inventory} className="border-b border-slate-200/70 dark:border-white/10">
+          <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div className="max-w-2xl">
-                <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-                  {s.t(hasInventory ? "home.inventory.titleWithStock" : "home.inventory.titleEmpty")}
+                <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-orange-600 dark:text-orange-400">
+                  {s.t("home.inventory.eyebrow")}
+                </p>
+                <h2 className="mt-3 text-2xl font-extrabold leading-tight tracking-tight text-[var(--brand-navy-900)] sm:text-3xl dark:text-white">
+                  {s.t("home.inventory.title")}
                 </h2>
-                <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
-                  {s.t(hasInventory ? "home.inventory.bodyWithStock" : "home.inventory.bodyEmpty")}
+                <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                  {s.t("home.inventory.subtitle")}
                 </p>
               </div>
 
               {hasInventory && (
                 <Link
                   href="/inventory"
-                  className="inline-flex h-11 shrink-0 items-center gap-1.5 self-start rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition-colors hover:border-slate-400 hover:bg-slate-50"
+                  className="inline-flex h-11 shrink-0 items-center gap-1.5 self-start rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-[var(--brand-navy-900)] transition-colors hover:bg-slate-50 dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
                 >
                   <span>{s.t("home.inventory.viewAll")}</span>
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -265,253 +114,187 @@ export default async function HomePage({ searchParams }: PageProps) {
             </div>
 
             {hasInventory ? (
-              <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {vehicles.map((vehicle) => (
-                  <VehicleCard key={vehicle.id} vehicle={vehicle} language={s.language} emphasis="featured" />
-                ))}
-              </div>
-            ) : (
-              /* Polished empty state: helpful, honest, and still converts. */
-              <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs sm:p-10">
-                <div className="mx-auto max-w-xl text-center">
-                  <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-                    <Car className="h-6 w-6" aria-hidden="true" />
-                  </span>
-                  <h3 className="mt-4 text-lg font-bold tracking-tight text-slate-900">
-                    {s.t("home.inventory.empty.title")}
-                  </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                    {s.t("home.inventory.empty.body")}
-                  </p>
-
-                  <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-                    {phone && telHref && (
-                      <a
-                        href={telHref}
-                        className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-orange-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-orange-700"
-                      >
-                        <Phone className="h-4 w-4" aria-hidden="true" />
-                        <span>{s.tc("home.inventory.empty.call", { phone })}</span>
-                      </a>
-                    )}
-                    {email && (
-                      <a
-                        href={`mailto:${email}?subject=${encodeURIComponent(
-                          s.tc("home.inventory.empty.mailSubject", { name }),
-                        )}`}
-                        className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50"
-                      >
-                        <Mail className="h-4 w-4 text-orange-600" aria-hidden="true" />
-                        <span>{s.t("home.inventory.empty.email")}</span>
-                      </a>
-                    )}
-                    {!phone && !email && (
-                      <Link
-                        href="/inventory"
-                        className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50"
-                      >
-                        <span>{s.t("home.inventory.empty.recheck")}</span>
-                      </Link>
-                    )}
-                  </div>
+              <>
+                {/*
+                  Mobile: a natural swipe rail (one card at a time, snap-aligned) so
+                  the photo and price read immediately on a phone.
+                  Desktop: the same cards in a three-up grid.
+                */}
+                <div className="mt-7 sm:hidden">
+                  <ul className="snap-rail -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
+                    {vehicles.map((vehicle) => (
+                      <li key={vehicle.id} className="flex">
+                        <VehicleCard vehicle={vehicle} language={s.language} rail emphasis="featured" />
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              </div>
+
+                <div className="mt-7 hidden gap-5 sm:grid sm:grid-cols-2 lg:grid-cols-3">
+                  {vehicles.map((vehicle) => (
+                    <VehicleCard key={vehicle.id} vehicle={vehicle} language={s.language} emphasis="featured" />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <EmptyInventory s={s} phone={phone} telHref={telHref} email={email} name={name} />
             )}
           </div>
         </section>
 
         {/* ---------------------------------------------------------------- */}
-        {/* E. HOW IT WORKS                                                  */}
+        {/* 3. JOURNEY — four short steps                                    */}
         {/* ---------------------------------------------------------------- */}
-        <section id={SECTION_IDS.howItWorks} className="border-y border-slate-200 bg-white">
-          <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+        <section
+          id={SECTION_IDS.journey}
+          className="border-b border-slate-200/70 bg-white dark:border-white/10 dark:bg-[var(--brand-navy-900)]/40"
+        >
+          <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
             <div className="max-w-2xl">
-              <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-700">
-                {s.t("home.steps.eyebrow")}
-              </span>
-              <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-                {s.t("home.steps.title")}
+              <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-orange-600 dark:text-orange-400">
+                {s.t("home.journey.eyebrow")}
+              </p>
+              <h2 className="mt-3 text-2xl font-extrabold leading-tight tracking-tight text-[var(--brand-navy-900)] sm:text-3xl dark:text-white">
+                {s.t("home.journey.title")}
               </h2>
-              <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">{s.t("home.steps.subtitle")}</p>
+              <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                {s.t("home.journey.subtitle")}
+              </p>
             </div>
 
-            <ol className="mt-8 grid grid-cols-1 gap-4 sm:mt-10 sm:grid-cols-2 lg:grid-cols-4">
-              {STEPS.map((step, index) => {
+            <ol className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {JOURNEY_STEPS.map((step, index) => {
                 const Icon = step.icon;
                 return (
-                  <li key={step.titleKey} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5 sm:p-6">
+                  <li key={step.titleKey} className="relative rounded-2xl p-5 surface-card sm:p-6">
                     <div className="flex items-center gap-3">
-                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white font-mono text-sm font-extrabold text-slate-900 ring-1 ring-slate-200">
+                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 font-mono text-sm font-extrabold text-orange-700 dark:bg-orange-500/15 dark:text-orange-400">
                         {index + 1}
                       </span>
-                      <Icon className="h-5 w-5 text-orange-600" aria-hidden="true" />
+                      <Icon className="h-5 w-5 text-[var(--brand-navy-700)] dark:text-slate-300" aria-hidden="true" />
                     </div>
-                    <h3 className="mt-4 text-base font-bold tracking-tight text-slate-900">{s.t(step.titleKey)}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-600">{s.t(step.bodyKey)}</p>
+                    <h3 className="mt-4 text-base font-bold tracking-tight text-[var(--brand-navy-900)] dark:text-white">
+                      {s.t(step.titleKey)}
+                    </h3>
+                    <p className="mt-1.5 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                      {s.t(step.bodyKey)}
+                    </p>
                   </li>
                 );
               })}
             </ol>
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="mt-8">
               <Link
                 href="/inventory"
                 className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-orange-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-orange-700"
               >
-                <span>{s.t("home.steps.cta")}</span>
+                <span>{s.t("home.journey.cta")}</span>
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
-              <p className="text-xs text-slate-500">{s.t("home.steps.note")}</p>
             </div>
           </div>
         </section>
 
         {/* ---------------------------------------------------------------- */}
-        {/* F. BUYING OPTIONS / FINANCING / FLEXIBILITY                      */}
+        {/* 4. BUYING OPTIONS — navy band                                    */}
         {/* ---------------------------------------------------------------- */}
-        <section id={SECTION_IDS.buyingOptions} className="bg-slate-50">
+        <section id={SECTION_IDS.buyingOptions} className="brand-panel">
           <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
             <div className="max-w-2xl">
-              <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-700">
+              <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-orange-300">
                 {s.t("home.options.eyebrow")}
-              </span>
-              <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-                {s.t("home.options.title")}
-              </h2>
-              <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
+              </p>
+              <RichHeading
+                runs={s.rich("home.options.title")}
+                className="mt-3 text-2xl font-extrabold leading-tight tracking-tight text-white sm:text-3xl"
+                emphasisClassName="text-orange-400"
+              />
+              <p className="mt-3 text-sm leading-relaxed text-slate-300 sm:text-base">
                 {s.t("home.options.subtitle")}
               </p>
             </div>
 
-            <div className="mt-8 grid grid-cols-1 gap-4 sm:mt-10 sm:grid-cols-2">
+            <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {BUYING_OPTIONS.map((option) => {
                 const Icon = option.icon;
                 return (
                   <div
                     key={option.titleKey}
-                    className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6"
+                    className="rounded-2xl border border-white/10 bg-white/5 p-5 transition-colors hover:bg-white/10"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-[var(--brand-navy-800)]">
-                        <Icon className="h-5 w-5" aria-hidden="true" />
-                      </span>
-                      <h3 className="text-base font-bold tracking-tight text-slate-900">{s.t(option.titleKey)}</h3>
-                    </div>
-
-                    <p className="mt-3 text-sm leading-relaxed text-slate-600">{s.t(option.bodyKey)}</p>
-
-                    <ul className="mt-4 space-y-2 border-t border-slate-100 pt-4">
-                      {option.pointKeys.map((pointKey) => (
-                        <li key={pointKey} className="flex items-start gap-2 text-xs text-slate-600">
-                          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-600" aria-hidden="true" />
-                          <span>{s.t(pointKey)}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/15 text-orange-400">
+                      <Icon className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <h3 className="mt-4 text-base font-bold tracking-tight text-white">{s.t(option.titleKey)}</h3>
+                    <p className="mt-1.5 text-sm leading-relaxed text-slate-300">{s.t(option.bodyKey)}</p>
                   </div>
                 );
               })}
             </div>
 
-            {/* Required honesty note. Kept visible, not buried in fine print. */}
-            <p className="mt-6 rounded-xl border border-slate-200 bg-white p-4 text-xs leading-relaxed text-slate-600">
-              <span className="font-semibold text-slate-800">{s.t("home.options.disclaimerLabel")}</span>{" "}
+            {/* Required honesty note — present, but deliberately not dominant. */}
+            <p className="mt-6 max-w-3xl text-[11px] leading-relaxed text-slate-400">
+              <span className="font-semibold text-slate-300">{s.t("home.options.disclaimerLabel")}</span>{" "}
               {s.t("home.options.disclaimer")}
             </p>
           </div>
         </section>
 
         {/* ---------------------------------------------------------------- */}
-        {/* G. TRUST                                                         */}
+        {/* 5. NEXO FAMILY — brand story                                     */}
         {/* ---------------------------------------------------------------- */}
-        <section className="brand-panel">
+        <section
+          id={SECTION_IDS.family}
+          className="border-b border-slate-200/70 bg-white dark:border-white/10 dark:bg-[var(--brand-navy-900)]/40"
+        >
           <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
-            <div className="max-w-2xl">
-              <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-300">
-                {s.t("home.trust.eyebrow")}
-              </span>
-              <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
-                {s.t("home.trust.title")}
-              </h2>
-              <p className="mt-3 text-sm leading-relaxed text-slate-300 sm:text-base">{s.t("home.trust.subtitle")}</p>
-            </div>
+            <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-12 lg:gap-12">
+              <div className="lg:col-span-7">
+                <p className="inline-flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-orange-600 dark:text-orange-400">
+                  <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                  {s.t("home.family.eyebrow")}
+                </p>
 
-            <div className="mt-8 grid grid-cols-1 gap-x-8 gap-y-6 sm:mt-10 sm:grid-cols-2">
-              {TRUST_POINTS.map((point) => {
-                const Icon = point.icon;
-                return (
-                  <div key={point.titleKey} className="flex gap-4">
-                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-orange-400">
-                      <Icon className="h-5 w-5" aria-hidden="true" />
-                    </span>
-                    <div>
-                      <h3 className="text-base font-bold tracking-tight text-white">{s.t(point.titleKey)}</h3>
-                      <p className="mt-1.5 text-sm leading-relaxed text-slate-300">{s.t(point.bodyKey)}</p>
-                    </div>
+                <RichHeading
+                  runs={s.rich("home.family.title")}
+                  className="mt-4 text-2xl font-extrabold leading-tight tracking-tight text-[var(--brand-navy-900)] sm:text-4xl dark:text-white"
+                  emphasisClassName="text-orange-600 dark:text-orange-500"
+                />
+
+                <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-base dark:text-slate-300">
+                  {s.t("home.family.body")}
+                </p>
+
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <Link
+                    href="/inventory"
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-orange-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-orange-700"
+                  >
+                    <span>{s.t("home.family.cta")}</span>
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </Link>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{s.t("home.family.note")}</p>
+                </div>
+              </div>
+
+              {/*
+                No second photograph is invented to fill this column, and the
+                paragraph above is not repeated here. The composition is carried by
+                layout and the approved brand mark, which keeps the section honest
+                and avoids stock imagery.
+              */}
+              <div className="lg:col-span-5">
+                <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 p-8 dark:border-white/10 dark:bg-[var(--brand-navy-900)]">
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-orange-500/10 blur-2xl"
+                  />
+                  <div className="relative space-y-5">
+                    <NexoFamilyBadge name={name} tagline={s.t("meta.tagline")} />
+                    <NexoFamilyNote text={s.tc("brand.familyNote", { family: s.t("brand.familyName") })} />
                   </div>
-                );
-              })}
-            </div>
-
-            {aboutText && (
-              <div className="mt-10 rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-6">
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-white">
-                  {s.tc("home.trust.aboutTitle", { name })}
-                </h3>
-                <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-300">{aboutText}</p>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* ---------------------------------------------------------------- */}
-        {/* H. FINAL CTA                                                     */}
-        {/* ---------------------------------------------------------------- */}
-        <section className="bg-white">
-          <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 text-center shadow-xs sm:p-12">
-              <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-700">
-                {s.t("home.final.eyebrow")}
-              </span>
-              <h2 className="mx-auto mt-3 max-w-2xl text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-                {s.t(hasInventory ? "home.final.titleWithStock" : "home.final.titleEmpty")}
-              </h2>
-              <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-slate-600 sm:text-base">
-                {s.t(hasInventory ? "home.final.bodyWithStock" : "home.final.bodyEmpty")}
-              </p>
-
-              <div className="mt-7 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-center">
-                <Link
-                  href="/inventory"
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-orange-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-orange-700"
-                >
-                  <span>{s.t("home.final.browse")}</span>
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </Link>
-
-                {phone && telHref && (
-                  <a
-                    href={telHref}
-                    className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-6 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-100"
-                  >
-                    <Phone className="h-4 w-4 text-orange-600" aria-hidden="true" />
-                    <span>{s.tc("home.final.call", { phone })}</span>
-                  </a>
-                )}
-
-                {!phone && email && (
-                  <a
-                    href={`mailto:${email}`}
-                    className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-6 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-100"
-                  >
-                    <Mail className="h-4 w-4 text-orange-600" aria-hidden="true" />
-                    <span>{s.tc("home.final.email", { name })}</span>
-                  </a>
-                )}
-              </div>
-
-              <div className="mt-7 flex justify-center border-t border-slate-200 pt-6">
-                <NexoFamilyNote text={s.tc("brand.familyNote", { family: s.t("brand.familyName") })} />
+                </div>
               </div>
             </div>
           </div>
@@ -519,6 +302,85 @@ export default async function HomePage({ searchParams }: PageProps) {
       </main>
 
       <PublicFooter dealerInfo={dealer} language={s.language} />
+    </div>
+  );
+}
+
+/** The brand mark block used in the family section. */
+function NexoFamilyBadge({ name, tagline }: { name: string; tagline: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <NexoMark size={40} className="rounded-[10px]" />
+      <div className="flex flex-col leading-none">
+        <span className="text-base font-extrabold tracking-tight text-[var(--brand-navy-900)] dark:text-white">
+          {name.toUpperCase()}
+        </span>
+        <span className="mt-1 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
+          {tagline}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Honest, helpful empty inventory state — never fake cars. */
+function EmptyInventory({
+  s,
+  phone,
+  telHref,
+  email,
+  name,
+}: {
+  s: PublicStrings;
+  phone: string | null;
+  telHref: string | null;
+  email: string | null;
+  name: string;
+}) {
+  return (
+    <div className="mt-7 rounded-2xl p-6 text-center surface-card sm:p-10">
+      <div className="mx-auto max-w-xl">
+        <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300">
+          <Car className="h-6 w-6" aria-hidden="true" />
+        </span>
+        <h3 className="mt-4 text-lg font-bold tracking-tight text-[var(--brand-navy-900)] dark:text-white">
+          {s.t("home.inventory.empty.title")}
+        </h3>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+          {s.t("home.inventory.empty.body")}
+        </p>
+
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          {phone && telHref && (
+            <a
+              href={telHref}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-orange-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-orange-700"
+            >
+              <Phone className="h-4 w-4" aria-hidden="true" />
+              <span>{s.tc("home.inventory.empty.call", { phone })}</span>
+            </a>
+          )}
+          {email && (
+            <a
+              href={`mailto:${email}?subject=${encodeURIComponent(
+                s.tc("home.inventory.empty.mailSubject", { name }),
+              )}`}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-[var(--brand-navy-900)] transition-colors hover:bg-slate-50 dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+            >
+              <Mail className="h-4 w-4 text-orange-600 dark:text-orange-400" aria-hidden="true" />
+              <span>{s.t("home.inventory.empty.email")}</span>
+            </a>
+          )}
+          {!phone && !email && (
+            <Link
+              href="/inventory"
+              className="inline-flex h-12 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-[var(--brand-navy-900)] transition-colors hover:bg-slate-50 dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+            >
+              {s.t("home.inventory.empty.recheck")}
+            </Link>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

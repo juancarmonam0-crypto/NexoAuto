@@ -61,32 +61,32 @@ export default async function InventoryPage({ searchParams }: PageProps) {
   const hasNextPage = vehicles.length === PUBLIC_INVENTORY_PAGE_SIZE;
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
+    <div className="flex min-h-screen flex-col surface-page">
       <PublicNav dealerInfo={dealer} language={s.language} />
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
         {/* Breadcrumb */}
         <nav aria-label="Breadcrumb" className="mb-5">
-          <ol className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
+          <ol className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
             <li>
-              <Link href="/" className="transition-colors hover:text-orange-700">
+              <Link href="/" className="transition-colors hover:text-orange-700 dark:hover:text-orange-400">
                 {s.t("inventory.breadcrumbHome")}
               </Link>
             </li>
             <li aria-hidden="true">
               <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
             </li>
-            <li className="font-semibold text-slate-800">{s.t("inventory.breadcrumbCurrent")}</li>
+            <li className="font-semibold text-slate-800 dark:text-slate-100">{s.t("inventory.breadcrumbCurrent")}</li>
           </ol>
         </nav>
 
         {/* Page header + search */}
-        <div className="mb-7 flex flex-col gap-5 border-b border-slate-200 pb-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="mb-7 flex flex-col gap-5 border-b border-slate-200 pb-6 dark:border-white/10 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
-            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+            <h1 className="text-2xl font-extrabold tracking-tight text-[var(--brand-navy-900)] sm:text-3xl dark:text-white">
               {s.t("inventory.title")}
             </h1>
-            <p className="mt-2 text-sm leading-relaxed text-slate-600">{s.tc("inventory.intro", { name })}</p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{s.tc("inventory.intro", { name })}</p>
           </div>
 
           <form method="get" action="/inventory" className="w-full lg:w-auto">
@@ -95,7 +95,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <div className="relative w-full sm:w-72">
                 <Search
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500"
                   aria-hidden="true"
                 />
                 <label htmlFor="inventory-search" className="sr-only">
@@ -107,12 +107,12 @@ export default async function InventoryPage({ searchParams }: PageProps) {
                   name="q"
                   defaultValue={search ?? ""}
                   placeholder={s.t("inventory.searchPlaceholder")}
-                  className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1"
+                  className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-sm text-[var(--brand-navy-900)] placeholder:text-slate-400 dark:border-white/20 dark:bg-white/5 dark:text-white focus:border-orange-500 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1"
                 />
               </div>
               <button
                 type="submit"
-                className="inline-flex h-11 shrink-0 items-center justify-center rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+                className="inline-flex h-11 shrink-0 items-center justify-center rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white transition-colors hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
               >
                 {s.t("inventory.searchAction")}
               </button>
@@ -123,7 +123,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
         {/* Results */}
         {hasResults ? (
           <>
-            <p className="mb-4 text-xs text-slate-500" role="status">
+            <p className="mb-4 text-xs text-slate-500 dark:text-slate-400" role="status">
               {search ? (
                 s.tc("inventory.resultsMatching", { query: `“${search}”` })
               ) : (
@@ -138,14 +138,14 @@ export default async function InventoryPage({ searchParams }: PageProps) {
             </div>
           </>
         ) : (
-          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xs sm:p-12">
-            <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+          <div className="rounded-2xl p-8 text-center surface-card sm:p-12">
+            <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300">
               <Car className="h-6 w-6" aria-hidden="true" />
             </span>
-            <h2 className="mt-4 text-lg font-bold tracking-tight text-slate-900">
+            <h2 className="mt-4 text-lg font-bold tracking-tight text-[var(--brand-navy-900)] dark:text-white">
               {search ? s.tc("inventory.empty.searchTitle", { query: `“${search}”` }) : s.t("inventory.empty.title")}
             </h2>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-600">
+            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-600 dark:text-slate-300 dark:text-slate-300">
               {s.t(search ? "inventory.empty.searchBody" : "inventory.empty.body")}
             </p>
 
@@ -153,14 +153,14 @@ export default async function InventoryPage({ searchParams }: PageProps) {
               {search ? (
                 <Link
                   href="/inventory"
-                  className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+                  className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white transition-colors hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
                 >
                   <span>{s.t("inventory.empty.clearSearch")}</span>
                 </Link>
               ) : (
                 <Link
                   href="/"
-                  className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+                  className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white transition-colors hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
                 >
                   <span>{s.t("inventory.empty.home")}</span>
                 </Link>
@@ -169,7 +169,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
               {phone && (
                 <a
                   href={`tel:${phone.replace(/[^+\d]/g, "")}`}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-800 dark:text-slate-100 transition-colors hover:bg-slate-50"
                 >
                   <Phone className="h-4 w-4 text-orange-600" aria-hidden="true" />
                   <span>{s.t("inventory.empty.askAboutUpcoming")}</span>
@@ -183,7 +183,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
         {(page > 1 || hasNextPage) && (
           <nav
             aria-label={s.t("inventory.paginationLabel")}
-            className="mt-10 flex items-center justify-between gap-4 border-t border-slate-200 pt-6"
+            className="mt-10 flex items-center justify-between gap-4 border-t border-slate-200 pt-6 dark:border-white/10"
           >
             <div className="flex-1">
               {page > 1 && (
@@ -194,7 +194,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
                     page: String(page - 1),
                   })}`}
                   rel="prev"
-                  className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                  className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-50"
                 >
                   <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                   <span>{s.t("inventory.previous")}</span>
@@ -202,7 +202,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
               )}
             </div>
 
-            <span className="font-mono text-xs text-slate-500">{s.tc("inventory.page", { page })}</span>
+            <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{s.tc("inventory.page", { page })}</span>
 
             <div className="flex flex-1 justify-end">
               {hasNextPage && (
@@ -213,7 +213,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
                     page: String(page + 1),
                   })}`}
                   rel="next"
-                  className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                  className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-50"
                 >
                   <span>{s.t("inventory.next")}</span>
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />

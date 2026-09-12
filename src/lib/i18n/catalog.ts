@@ -47,15 +47,12 @@ export const PARAM_KEYS = {
   "meta.vehicle.description": ["vehicle", "mileage", "price"],
   "brand.familyNote": ["family"],
   "language.switchTo": ["language"],
+  "theme.switchTo": ["theme"],
   "nav.home": ["name"],
   "nav.callDealer": ["name", "phone"],
   "a11y.srHeadline": ["name"],
-  "home.hero.call": ["phone"],
   "home.inventory.empty.call": ["phone"],
   "home.inventory.empty.mailSubject": ["name"],
-  "home.trust.aboutTitle": ["name"],
-  "home.final.call": ["phone"],
-  "home.final.email": ["name"],
   "card.viewAction": ["vehicle", "stock", "price"],
   "card.photoAlt": ["vehicle"],
   "inventory.intro": ["name"],
@@ -79,6 +76,46 @@ export const PARAM_KEYS = {
 export type ParamKey = keyof typeof PARAM_KEYS;
 
 export type TParams<K extends ParamKey> = Record<(typeof PARAM_KEYS)[K][number], string | number>;
+
+/**
+ * Emphasis markers.
+ *
+ * The approved mockup highlights the closing phrase of a headline in Nexo
+ * orange ("A simpler way.", "Better tomorrow."). The dictionary stores that as
+ * `{{...}}` rather than markup, so:
+ *   - translators see one plain sentence, not HTML,
+ *   - the copy is never `dangerouslySetInnerHTML`,
+ *   - the styling decision stays in the component that renders the heading.
+ */
+export const EMPHASIS_OPEN = "{{";
+export const EMPHASIS_CLOSE = "}}";
+
+/** Splits a string into plain and emphasised runs, in order. */
+export interface EmphasisRun {
+  text: string;
+  emphasised: boolean;
+}
+
+export function splitEmphasis(value: string): EmphasisRun[] {
+  const runs: EmphasisRun[] = [];
+  const pattern = /\{\{(.+?)\}\}/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(value)) !== null) {
+    if (match.index > cursor) runs.push({ text: value.slice(cursor, match.index), emphasised: false });
+    runs.push({ text: match[1], emphasised: true });
+    cursor = match.index + match[0].length;
+  }
+
+  if (cursor < value.length) runs.push({ text: value.slice(cursor), emphasised: false });
+  return runs;
+}
+
+/** The same string with markers removed — for alt text, titles and metadata. */
+export function plainText(value: string): string {
+  return value.replace(/\{\{(.+?)\}\}/g, "$1");
+}
 
 /**
  * Plural pairs, so counted copy never ships as "1 vehicles".
@@ -108,6 +145,8 @@ export type PublicStrings = {
   tn: (key: CountKey, count: number) => string;
   /** Locale-correct thousands separators: 68,000 (en) vs 68.000 (es). */
   n: (value: number) => string;
+  /** Emphasis runs for a headline, so orange words never live in the markup. */
+  rich: (key: TranslationKey) => EmphasisRun[];
 };
 
 /** Fills `{placeholders}`. A missing value leaves the token visible, not blank. */
@@ -153,5 +192,6 @@ export function strings(language: Language): PublicStrings {
     tc: (key, params) => translateWith(language, key, params),
     tn: (key, count) => translateCount(language, key, count),
     n: (value) => value.toLocaleString(language),
+    rich: (key) => splitEmphasis(translate(language, key)),
   };
 }

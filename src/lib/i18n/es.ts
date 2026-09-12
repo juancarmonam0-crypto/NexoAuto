@@ -1,31 +1,32 @@
 /**
  * Nexo Auto — public (customer-facing) Spanish copy.
  *
- * Written as United States customer-facing Spanish, not a literal translation
- * of the English file. The goal is that a Spanish-speaking buyer reads a page
- * that sounds like it was written in Spanish, while every factual promise —
- * especially anything about financing — is IDENTICAL in strength to the English
- * edition. Nothing here may imply guaranteed approval.
+ * Written as United States customer-facing Spanish, not a literal translation of
+ * the English file. The goal is that a Spanish-speaking buyer reads a page that
+ * sounds like it was written in Spanish, while every factual promise — especially
+ * anything about financing — is IDENTICAL in strength to the English edition.
+ * Nothing here may imply guaranteed approval.
  *
  * The key set is enforced by the dictionary type: `npm run typecheck` fails if
  * this file and `en.ts` drift apart, so a page can never be 70% translated
  * without the build saying so.
  *
- * Vehicle DATA (VIN, stock number, make, model, trim, mileage, prices) is never
- * translated — only the labels around it.
+ * `{{double braces}}` mark the run of words the page emphasises in Nexo orange,
+ * mirroring the English headline treatment. Vehicle DATA (VIN, stock number,
+ * make, model, trim, mileage, prices) is never translated.
  */
 export const es = {
   // ---- Shared / metadata -------------------------------------------------
   "meta.siteName": "Nexo Auto",
-  "meta.home.title": "Nexo Auto — Comprar un auto, sin complicaciones",
+  "meta.home.title": "Nexo Auto — Mejores autos. Una forma más simple.",
   "meta.home.description":
-    "Explora una selección cuidada de autos usados con precios claros, opciones de financiamiento sencillas y un proceso digital que puedes hacer desde tu teléfono.",
+    "Autos usados cuidadosamente seleccionados, precios claros y diferentes formas de comprar. Mira lo disponible y conoce tus opciones antes de decidir.",
   "meta.inventory.title": "Inventario",
   "meta.inventory.description":
-    "Consulta todos los vehículos disponibles en Nexo Auto con precio, millaje, equipamiento y fotos.",
+    "Todos los vehículos publicados en Nexo Auto, con precio, millaje, equipamiento y fotos.",
   "meta.vehicle.notFound": "Vehículo no encontrado",
   "meta.vehicle.description": "{vehicle} con {mileage} millas, disponible en Nexo Auto por {price}.",
-  "meta.tagline": "Comprar un auto, sin complicaciones",
+  "meta.tagline": "Comprar tu auto, más simple",
 
   // ---- Brand family ------------------------------------------------------
   "brand.familyNote": "Parte de la familia {family} — el mismo equipo detrás de Nexo Rental.",
@@ -37,177 +38,122 @@ export const es = {
   "language.english": "Inglés",
   "language.spanish": "Español",
 
+  // ---- Theme control -----------------------------------------------------
+  "theme.label": "Tema",
+  "theme.switchTo": "Cambiar a {theme}",
+  "theme.light": "Claro",
+  "theme.dark": "Oscuro",
+  "theme.system": "Sistema",
+  "theme.legend": "Apariencia",
+
   // ---- Header / navigation ----------------------------------------------
   "nav.primary": "Principal",
+  "nav.openMenu": "Abrir menú",
+  "nav.closeMenu": "Cerrar menú",
+  "nav.menuTitle": "Menú",
   "nav.home": "{name} — inicio",
   "nav.inventory": "Inventario",
   "nav.howItWorks": "Cómo funciona",
-  "nav.buyingOptions": "Opciones de compra",
+  "nav.financing": "Financiamiento",
+  "nav.about": "Nosotros",
+  "nav.contact": "Contacto",
   "nav.browseCars": "Ver autos",
   "nav.browseCarsShort": "Ver autos",
   "nav.callDealer": "Llamar a {name} al {phone}",
+  "nav.callUs": "Llámanos",
+  "nav.emailUs": "Escríbenos",
   "nav.operatorSignIn": "Acceso de operadores",
 
   // ---- Accessibility -----------------------------------------------------
   "a11y.srHeadline": "{name} — autos usados, precios claros, compra sencilla",
+  "a11y.heroImage": "Una SUV blanca fotografiada frente al horizonte de una ciudad al atardecer",
 
   // ---- Homepage: hero ----------------------------------------------------
-  "home.hero.badge": "Comprar un auto, sin complicaciones",
-  "home.hero.headlineFallback": "Menos autos. Elegidos con cuidado.",
-  "home.hero.subtextFallback":
-    "Nexo Auto es una agencia pequeña y moderna con una idea central: comprar un auto usado debería ser simple, claro y sin presión. Mira los autos, conoce precios reales y arma una compra que quepa en tu presupuesto.",
-  "home.hero.primaryCta": "Ver inventario",
-  "home.hero.secondaryCta": "Ver cómo funciona",
-  "home.hero.assuranceInventory": "Inventario real y disponible",
+  "home.hero.eyebrow": "Comprar tu auto, más simple",
+  "home.hero.headline": "Mejores autos.\nUna {{forma más simple.}}",
+  "home.hero.subtext":
+    "Autos usados cuidadosamente seleccionados, precios claros y diferentes formas de comprar. Mira lo disponible y conoce tus opciones antes de decidir.",
+  "home.hero.primaryCta": "Ver autos",
+  "home.hero.secondaryCta": "Cómo funciona",
   "home.hero.assurancePricing": "Precios claros",
-  "home.hero.assuranceFinancing": "Te ayudamos con el financiamiento",
-  "home.hero.preferTalk": "¿Prefieres hablarlo con alguien?",
-  "home.hero.call": "Llama al {phone}",
-  "home.hero.email": "Escríbenos",
-
-  // ---- Homepage: benefits -------------------------------------------------
-  "home.benefits.eyebrow": "Por qué Nexo Auto",
-  "home.benefits.title": "Comprar un auto sin las trabas de siempre",
-  "home.benefits.subtitle":
-    "Sin presión de piso de venta, sin una lista interminable de cargos y sin misterio en el precio. Así se ve en la práctica.",
-  "home.benefits.pricing.title": "El precio a la vista",
-  "home.benefits.pricing.body":
-    "Cada vehículo publicado muestra su precio en la tarjeta. Sin “llama para saber el precio”, sin anuncios gancho y sin cargos sorpresa antes de que decidas algo.",
-  "home.benefits.market.title": "Precios inteligentes, menos conjeturas",
-  "home.benefits.market.body":
-    "Fijamos el precio con evidencia real del mercado, no por corazonada, para que el número que ves refleje lo que de verdad se están vendiendo autos comparables.",
-  "home.benefits.options.title": "Opciones que caben en tu presupuesto",
-  "home.benefits.options.body":
-    "De contado, con financiamiento tradicional o con un plan armado alrededor de lo que puedes dar de enganche. Ves la estructura antes de comprometerte.",
-  "home.benefits.mobile.title": "Pensado para tu teléfono",
-  "home.benefits.mobile.body":
-    "Busca, compara y pide detalles desde el teléfono que traes en la mano. No necesitas ir a la agencia solo para saber si vale la pena ver un auto.",
-  "home.benefits.selection.title": "Menos autos, elegidos con cuidado",
-  "home.benefits.selection.body":
-    "Mantenemos el inventario pequeño a propósito. Cada vehículo recibe atención real antes de publicarse y nada queda ahí solo para llenar espacio.",
-  "home.benefits.cta.title": "Listos cuando tú lo estés",
-  "home.benefits.cta.body":
-    "Empieza por los autos. Si algo te late, nosotros seguimos — no hay formularios para poder ver el precio.",
-  "home.benefits.cta.action": "Ver autos disponibles",
+  "home.hero.assurancePricingBody": "Sin cargos escondidos",
+  "home.hero.assuranceSelection": "Inventario seleccionado con cuidado",
+  "home.hero.assuranceSelectionBody": "Calidad en la que puedes confiar",
+  "home.hero.assuranceFinancing": "Orientación sobre financiamiento",
+  "home.hero.assuranceFinancingBody": "Opciones para tu presupuesto",
 
   // ---- Homepage: inventory preview ---------------------------------------
-  "home.inventory.titleWithStock": "Disponibles ahora",
-  "home.inventory.titleEmpty": "Inventario actual",
-  "home.inventory.bodyWithStock":
-    "Los vehículos publicados hoy, con el precio en la tarjeta. Toca cualquiera para ver fotos, especificaciones y el detalle completo.",
-  "home.inventory.bodyEmpty":
-    "Publicamos los vehículos cuando están listos, no antes. Ahora mismo no hay nada publicado y preferimos mostrarte una página vacía que un auto que no puedes comprar.",
+  "home.inventory.eyebrow": "Inventario",
+  "home.inventory.title": "Encuentra el auto ideal para tu próxima etapa.",
+  "home.inventory.subtitle":
+    "Todos los vehículos de abajo están disponibles ahora mismo, con el precio a la vista.",
   "home.inventory.viewAll": "Ver todo el inventario",
   "home.inventory.empty.title": "Estamos eligiendo nuevos vehículos",
   "home.inventory.empty.body":
-    "El inventario cambia conforme conseguimos y preparamos autos. Dinos qué buscas y te avisamos cuando algo encaje — o vuelve a revisar en un rato.",
+    "Publicamos los vehículos cuando están listos, no antes. Dinos qué buscas y te avisamos cuando algo encaje.",
   "home.inventory.empty.call": "Llama al {phone}",
   "home.inventory.empty.email": "Dinos qué necesitas",
-  "home.inventory.empty.recheck": "Revisar el inventario otra vez",
   "home.inventory.empty.mailSubject": "Solicitud de vehículo — {name}",
+  "home.inventory.empty.recheck": "Revisar el inventario otra vez",
 
-  // ---- Homepage: how it works --------------------------------------------
-  "home.steps.eyebrow": "Cómo funciona",
-  "home.steps.title": "Cuatro pasos, sin sorpresas",
-  "home.steps.subtitle":
-    "El mismo proceso si pagas de contado o con financiamiento. Siempre sabrás en qué punto estás y qué sigue.",
-  "home.steps.1.title": "Mira los autos",
-  "home.steps.1.body":
-    "Empieza por lo que realmente está disponible. Fotos, millaje, equipamiento y precio en una sola página clara.",
-  "home.steps.2.title": "Revisa tus opciones",
-  "home.steps.2.body":
-    "Compara vehículos uno junto al otro y mira cómo encaja cada uno con lo que quieres gastar.",
-  "home.steps.3.title": "Arma tu oferta",
-  "home.steps.3.body":
-    "Dinos tu presupuesto y tu enganche. Te mostramos los caminos que encajan — y también los que no.",
-  "home.steps.4.title": "Avancemos",
-  "home.steps.4.body":
-    "Cuando los números y el auto estén bien, nosotros nos encargamos del papeleo y tú te vas manejando.",
-  "home.steps.cta": "Empezar mi búsqueda",
-  "home.steps.note": "Sin cuenta, sin formularios y sin precios escondidos detrás de una llamada.",
+  // ---- Homepage: four-step journey ---------------------------------------
+  "home.journey.eyebrow": "Cómo funciona",
+  "home.journey.title": "Cuatro pasos, sin adivinanzas",
+  "home.journey.subtitle": "El mismo proceso si pagas de contado o con financiamiento.",
+  "home.journey.1.title": "Explora",
+  "home.journey.1.body": "Mira el inventario realmente disponible.",
+  "home.journey.2.title": "Compara",
+  "home.journey.2.body": "Consulta precio, fotos y detalles del vehículo.",
+  "home.journey.3.title": "Arma tu oferta",
+  "home.journey.3.body": "Revisa opciones que se ajusten a tu presupuesto.",
+  "home.journey.4.title": "Compra con confianza",
+  "home.journey.4.body": "Completa los siguientes pasos con información clara.",
+  "home.journey.cta": "Empieza por los autos",
 
-  // ---- Homepage: buying options ------------------------------------------
+  // ---- Homepage: buying options band -------------------------------------
   "home.options.eyebrow": "Opciones de compra",
-  "home.options.title": "Paga como te acomode",
+  "home.options.title": "Diferentes formas de comprar.\nUna {{experiencia simple.}}",
   "home.options.subtitle":
-    "Aquí hay más de una forma de comprar un auto, y elegir una no te amarra. Revisamos las opciones con tus números sobre la mesa.",
+    "Elige la estructura que se ajuste a tu presupuesto. Revisamos los números contigo antes de decidir nada.",
   "home.options.cash.title": "Pago de contado",
-  "home.options.cash.body": "El camino más simple. Acordamos el precio, firmamos el papeleo y te llevas las llaves.",
-  "home.options.cash.point1": "Precio acordado por escrito",
-  "home.options.cash.point2": "Sin trámite de financiamiento",
-  "home.options.cash.point3": "Entrega más rápida",
+  "home.options.cash.body": "Acuerdas el precio, firmas el papeleo y te llevas las llaves.",
   "home.options.finance.title": "Financiamiento tradicional",
-  "home.options.finance.body":
-    "Te acompañamos con la solicitud al banco o financiera y te ayudamos a reunir lo necesario, para que no lo armes solo.",
-  "home.options.finance.point1": "Te guiamos en la solicitud",
-  "home.options.finance.point2": "Sujeto a revisión del financiador",
-  "home.options.finance.point3": "Las condiciones las define el financiador",
+  "home.options.finance.body": "Solicitas con un financiador, con acompañamiento en el proceso.",
   "home.options.guided.title": "Estructura de compra guiada",
-  "home.options.guided.body":
-    "Trae un presupuesto y el pago mensual que buscas. Te mostramos los plazos que más se acercan y dónde está exactamente la decisión.",
-  "home.options.guided.point1": "Escenarios de pago y plazo",
-  "home.options.guided.point2": "Son estimados, no aprobaciones",
-  "home.options.guided.point3": "Ajusta y compara antes de decidir",
-  "home.options.flexible.title": "Formas flexibles de tener el auto",
-  "home.options.flexible.body":
-    "Según el vehículo y tu situación, puede haber planes tipo arrendamiento o de más largo plazo. Pregúntanos y te decimos con honestidad qué aplica.",
-  "home.options.flexible.point1": "Depende del vehículo",
-  "home.options.flexible.point2": "Te lo explicamos antes de firmar",
-  "home.options.flexible.point3": "Sin obligación de continuar",
+  "home.options.guided.body": "Trae tu presupuesto y mira los plazos que encajan.",
+  "home.options.flexible.title": "Arrendamiento / con opción a compra",
+  "home.options.flexible.body": "Pregunta qué aplica para el vehículo que te interesa.",
   "home.options.disclaimerLabel": "Sobre el financiamiento:",
   "home.options.disclaimer":
-    "cualquier pago, plazo o tasa que veas en este sitio es solo un estimado para planear. No es una oferta de crédito, no es una decisión de crédito y no garantiza una aprobación. Las condiciones finales las define el financiador y dependen de tu solicitud.",
+    "las cifras de pago, plazo y tasa son estimados solo para planear — no son una oferta de crédito, ni una decisión de crédito, ni una garantía de aprobación. Las condiciones finales las define el financiador y dependen de tu solicitud.",
 
-  // ---- Homepage: trust ----------------------------------------------------
-  "home.trust.eyebrow": "Por qué Nexo Auto",
-  "home.trust.title": "La confianza se construye con cómo trabajamos, no con lo que prometemos",
-  "home.trust.subtitle":
-    "Somos una operación pequeña, así que competimos con claridad y no con volumen. Esto es lo que podemos sostener hoy.",
-  "home.trust.process.title": "Un proceso que puedes seguir",
-  "home.trust.process.body":
-    "Cada paso se explica antes de que ocurra. Siempre sabes qué sigue y cuánto cuesta.",
-  "home.trust.car.title": "El auto que tienes enfrente",
-  "home.trust.car.body":
-    "Las publicaciones reflejan vehículos que realmente tenemos, con los datos que realmente conocemos — sin relleno.",
-  "home.trust.people.title": "Una persona, no un portal",
-  "home.trust.people.body":
-    "Ser digitales no significa ser inalcanzables. Llama, escribe o manda un correo y recibirás una respuesta directa.",
-  "home.trust.pressure.title": "Decide sin presión",
-  "home.trust.pressure.body":
-    "Los números y las opciones son tuyos para revisarlos. No hay reloj corriendo ni obligación de comprar.",
-  "home.trust.aboutTitle": "Sobre {name}",
-
-  // ---- Homepage: final CTA ------------------------------------------------
-  "home.final.eyebrow": "Siguiente paso",
-  "home.final.titleWithStock": "Encuentra el auto y tómate tu tiempo",
-  "home.final.titleEmpty": "Dinos qué estás buscando",
-  "home.final.bodyWithStock":
-    "Revisa lo que hay disponible y pregúntanos lo que quieras — el precio, el historial, el financiamiento o si el auto te sirve para tu semana.",
-  "home.final.bodyEmpty":
-    "Ahora hay poco inventario, y preferimos encontrarte el vehículo correcto que empujarte el equivocado. Mándanos tu presupuesto y para qué necesitas el auto.",
-  "home.final.browse": "Ver inventario",
-  "home.final.call": "Llama al {phone}",
-  "home.final.email": "Escribe a {name}",
+  // ---- Homepage: Nexo family story ---------------------------------------
+  "home.family.eyebrow": "Parte de la familia Nexo",
+  "home.family.title": "Más que un auto.\nUn mejor {{mañana.}}",
+  "home.family.body":
+    "Nexo Auto forma parte de la familia Nexo — el mismo equipo detrás de Nexo Rental. Partimos de una idea simple: hacer que los servicios de todos los días sean más fáciles de entender y usar.",
+  "home.family.cta": "Ver inventario",
+  "home.family.note": "El mismo camino, una forma más simple de avanzar.",
 
   // ---- Vehicle card -------------------------------------------------------
   "card.photosSoon": "Fotos muy pronto",
   "card.askingPrice": "Precio",
-  "card.explore": "Ver más",
+  "card.explore": "Ver",
   "card.viewAction": "Ver {vehicle}, número de stock {stock}, {price}",
   "card.photoAlt": "Foto de {vehicle}",
+  "card.noPhoto": "Foto muy pronto",
 
   // ---- Inventory index ----------------------------------------------------
   "inventory.breadcrumbHome": "Inicio",
   "inventory.breadcrumbCurrent": "Inventario",
-  "inventory.title": "Inventario de vehículos",
-  "inventory.intro":
-    "Todo lo publicado por {name}, con el precio a la vista. Abre cualquier vehículo para ver fotos, especificaciones y opciones.",
+  "inventory.title": "Encuentra el auto ideal para tu próxima etapa.",
+  "inventory.intro": "Todo lo publicado por {name}, con el precio a la vista.",
   "inventory.searchLabel": "Buscar en el inventario por marca, modelo, VIN o número de stock",
   "inventory.searchPlaceholder": "Marca, modelo, VIN…",
   "inventory.searchAction": "Buscar",
   "inventory.resultsMatching": "Resultados para {query}",
-  "inventory.resultsCountOne": "Mostrando {count} vehículo publicado",
-  "inventory.resultsCountOther": "Mostrando {count} vehículos publicados",
+  "inventory.resultsCountOne": "{count} vehículo publicado",
+  "inventory.resultsCountOther": "{count} vehículos publicados",
   "inventory.empty.searchTitle": "Ningún vehículo coincide con {query}",
   "inventory.empty.title": "No hay vehículos publicados ahora",
   "inventory.empty.searchBody":
@@ -232,7 +178,7 @@ export const es = {
   "vehicle.features": "Equipamiento y características",
   "vehicle.interestedTitle": "¿Te interesa este vehículo?",
   "vehicle.interestedBody":
-    "Pregúntanos si sigue disponible, agenda una visita o revisemos los números juntos. Sin ningún compromiso.",
+    "Pregúntanos si sigue disponible, agenda una visita o revisemos los números juntos.",
   "vehicle.call": "Llama al {phone}",
   "vehicle.emailAction": "Escribir sobre este vehículo",
   "vehicle.noContact": "Los datos de contacto de la agencia todavía no están configurados.",
@@ -274,16 +220,17 @@ export const es = {
 
   // ---- Footer -------------------------------------------------------------
   "footer.explore": "Explora",
-  "footer.browseInventory": "Ver inventario",
+  "footer.browseInventory": "Inventario",
   "footer.howItWorks": "Cómo funciona",
-  "footer.buyingOptions": "Opciones de compra",
-  "footer.whyNexo": "Por qué Nexo Auto",
-  "footer.talkToUs": "Hablemos",
+  "footer.buyingOptions": "Financiamiento",
+  "footer.whyNexo": "Nosotros",
+  "footer.talkToUs": "Contacto",
   "footer.noContact": "Los datos de contacto aparecerán aquí cuando se configuren en la agencia.",
   "footer.financeNote": "Las cifras de financiamiento en las publicaciones son estimados, nunca aprobaciones.",
   "footer.rights": "© {year} {name}. Todos los derechos reservados.",
   "footer.taglineFallback":
-    "Una selección cuidada de autos usados con precios claros y un camino directo desde que miras hasta que manejas.",
+    "Autos usados cuidadosamente seleccionados, precios claros y un camino directo desde que miras hasta que manejas.",
+  "footer.appearance": "Apariencia",
 
   // ---- Customer-visible failure states -----------------------------------
   "error.genericTitle": "Algo salió mal",

@@ -121,15 +121,15 @@ export default async function VehicleDetailPage({ params, searchParams }: PagePr
   const languageQuery = query.lang ? `?lang=${query.lang}` : "";
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
+    <div className="flex min-h-screen flex-col surface-page">
       <PublicNav dealerInfo={dealer} language={s.language} />
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
         {/* Breadcrumb */}
         <nav aria-label="Breadcrumb" className="mb-5">
-          <ol className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
+          <ol className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
             <li>
-              <Link href={languageQuery ? `/${languageQuery}` : "/"} className="transition-colors hover:text-orange-700">
+              <Link href={languageQuery ? `/${languageQuery}` : "/"} className="transition-colors hover:text-orange-700 dark:hover:text-orange-400">
                 {s.t("inventory.breadcrumbHome")}
               </Link>
             </li>
@@ -137,14 +137,14 @@ export default async function VehicleDetailPage({ params, searchParams }: PagePr
               <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
             </li>
             <li>
-              <Link href={`/inventory${languageQuery}`} className="transition-colors hover:text-orange-700">
+              <Link href={`/inventory${languageQuery}`} className="transition-colors hover:text-orange-700 dark:hover:text-orange-400">
                 {s.t("inventory.breadcrumbCurrent")}
               </Link>
             </li>
             <li aria-hidden="true">
               <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
             </li>
-            <li className="max-w-[14rem] truncate font-semibold text-slate-800 sm:max-w-none">{title}</li>
+            <li className="max-w-[14rem] truncate font-semibold text-slate-800 dark:text-slate-100 sm:max-w-none">{title}</li>
           </ol>
         </nav>
 
@@ -167,7 +167,7 @@ export default async function VehicleDetailPage({ params, searchParams }: PagePr
 
               <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[11px] text-slate-300 sm:text-xs">
                 <span>{s.tc("spec.stockNumber", { stock: vehicle.stockNumber })}</span>
-                <span aria-hidden="true" className="text-slate-500">
+                <span aria-hidden="true" className="text-slate-500 dark:text-slate-400">
                   •
                 </span>
                 <span className="break-all">{s.tc("spec.vin", { vin: vehicle.vin })}</span>
@@ -190,27 +190,27 @@ export default async function VehicleDetailPage({ params, searchParams }: PagePr
         <div className="mt-8 grid grid-cols-1 items-start gap-6 lg:grid-cols-12 lg:gap-8">
           {/* Left: gallery, description, equipment */}
           <div className="space-y-6 lg:col-span-7">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs sm:p-5">
+            <div className="rounded-2xl p-4 surface-card sm:p-5">
               <VehiclePhotoGallery photos={vehicle.photos} vehicleTitle={title} language={s.language} />
             </div>
 
             {vehicle.description && (
-              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
-                <h2 className="text-base font-bold tracking-tight text-slate-900">{s.t("vehicle.about")}</h2>
-                <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-600">
+              <section className="rounded-2xl p-5 surface-card sm:p-6">
+                <h2 className="text-base font-bold tracking-tight text-[var(--brand-navy-900)] dark:text-white">{s.t("vehicle.about")}</h2>
+                <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-slate-300">
                   {vehicle.description}
                 </p>
               </section>
             )}
 
             {vehicle.features && vehicle.features.length > 0 && (
-              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
-                <h2 className="text-base font-bold tracking-tight text-slate-900">{s.t("vehicle.features")}</h2>
+              <section className="rounded-2xl p-5 surface-card sm:p-6">
+                <h2 className="text-base font-bold tracking-tight text-[var(--brand-navy-900)] dark:text-white">{s.t("vehicle.features")}</h2>
                 <ul className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {vehicle.features.map((feature) => (
                     <li
                       key={feature}
-                      className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700"
+                      className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-200"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-orange-600" aria-hidden="true" />
                       <span>{feature}</span>
@@ -224,9 +224,9 @@ export default async function VehicleDetailPage({ params, searchParams }: PagePr
           {/* Right: contact + specifications */}
           <div className="space-y-6 lg:col-span-5">
             {/* Contact card — sticks alongside on large screens. */}
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6 lg:sticky lg:top-20">
-              <h2 className="text-base font-bold tracking-tight text-slate-900">{s.t("vehicle.interestedTitle")}</h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">{s.t("vehicle.interestedBody")}</p>
+            <section className="rounded-2xl p-5 surface-card sm:p-6 lg:sticky lg:top-20">
+              <h2 className="text-base font-bold tracking-tight text-[var(--brand-navy-900)] dark:text-white">{s.t("vehicle.interestedTitle")}</h2>
+              <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{s.t("vehicle.interestedBody")}</p>
 
               <div className="mt-5 space-y-3">
                 {phone && telHref && (
@@ -242,7 +242,7 @@ export default async function VehicleDetailPage({ params, searchParams }: PagePr
                 {email && (
                   <a
                     href={`mailto:${email}?subject=${encodeURIComponent(mailtoSubject)}`}
-                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50"
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50 dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
                   >
                     <Mail className="h-4 w-4 text-orange-600" aria-hidden="true" />
                     <span>{s.t("vehicle.emailAction")}</span>
@@ -250,7 +250,7 @@ export default async function VehicleDetailPage({ params, searchParams }: PagePr
                 )}
 
                 {!phone && !email && (
-                  <p className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                  <p className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
                     <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
                     <span>{s.t("vehicle.noContact")}</span>
                   </p>
@@ -258,7 +258,7 @@ export default async function VehicleDetailPage({ params, searchParams }: PagePr
               </div>
 
               {/* Financing entry point — points at the explanation, never a promise. */}
-              <div className="mt-5 border-t border-slate-100 pt-4">
+              <div className="mt-5 border-t border-slate-100 pt-4 dark:border-white/10">
                 <Link
                   href={`/#${SECTION_IDS.buyingOptions}`}
                   className="inline-flex items-start gap-1.5 text-xs font-semibold text-orange-700 transition-colors hover:text-orange-800"
@@ -267,18 +267,18 @@ export default async function VehicleDetailPage({ params, searchParams }: PagePr
                   <span>{s.t("vehicle.optionsLink")}</span>
                   <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 </Link>
-                <p className="mt-2 text-[11px] leading-relaxed text-slate-500">{s.t("vehicle.financeNote")}</p>
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{s.t("vehicle.financeNote")}</p>
               </div>
             </section>
 
             {/* Specifications */}
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
-              <h2 className="text-base font-bold tracking-tight text-slate-900">{s.t("vehicle.specs")}</h2>
-              <dl className="mt-3 divide-y divide-slate-100 text-sm">
+            <section className="rounded-2xl p-5 surface-card sm:p-6">
+              <h2 className="text-base font-bold tracking-tight text-[var(--brand-navy-900)] dark:text-white">{s.t("vehicle.specs")}</h2>
+              <dl className="mt-3 divide-y divide-slate-100 text-sm dark:divide-white/10">
                 {specs.map((row) => (
                   <div key={row.label} className="flex items-start justify-between gap-4 py-2.5">
-                    <dt className="text-slate-500">{row.label}</dt>
-                    <dd className={`text-right font-medium text-slate-900 ${row.mono ? "font-mono" : ""}`}>
+                    <dt className="text-slate-500 dark:text-slate-400">{row.label}</dt>
+                    <dd className={`text-right font-medium text-[var(--brand-navy-900)] dark:text-white ${row.mono ? "font-mono" : ""}`}>
                       {row.value}
                     </dd>
                   </div>
@@ -288,7 +288,7 @@ export default async function VehicleDetailPage({ params, searchParams }: PagePr
 
             <Link
               href={`/inventory${languageQuery}`}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 transition-colors hover:text-orange-700"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 transition-colors hover:text-orange-700 dark:text-slate-400 dark:hover:text-orange-400 dark:hover:text-orange-400"
             >
               <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
               <span>{s.tc("vehicle.backToInventory", { name })}</span>

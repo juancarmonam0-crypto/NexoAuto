@@ -31,7 +31,7 @@ export default async function LoginPage() {
         </div>
 
         <div className="space-y-2 text-center">
-          <NexoMark className="mx-auto h-10 w-10 rounded-xl" />
+          <NexoMark size={48} className="mx-auto rounded-xl" />
           <h1 className="text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">Operator access</h1>
           <p className="text-xs text-slate-500">
             Sign in with authorized dealer credentials to reach the operator tools.

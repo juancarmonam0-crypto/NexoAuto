@@ -5,23 +5,23 @@ import { en } from "@/lib/i18n/en";
 import { es } from "@/lib/i18n/es";
 import {
   COUNT_KEYS,
+  EMPHASIS_CLOSE,
+  EMPHASIS_OPEN,
   PARAM_KEYS,
   dictionaries,
   interpolate,
+  plainText,
+  splitEmphasis,
   strings,
   translate,
   translateCount,
   translateWith,
 } from "@/lib/i18n/catalog";
 import {
-  BENEFITS,
-  BENEFIT_CTA_ACTION_KEY,
-  BENEFIT_CTA_BODY_KEY,
-  BENEFIT_CTA_TITLE_KEY,
   BUYING_OPTIONS,
-  HERO_ASSURANCE_KEYS,
-  STEPS,
-  TRUST_POINTS,
+  HERO_ASSURANCES,
+  JOURNEY_STEPS,
+  SECTION_IDS,
 } from "@/lib/i18n/public-content";
 import {
   DEFAULT_LANGUAGE,
@@ -36,27 +36,23 @@ import {
  *
  * WHAT THIS FILE PINS
  * 1. The two dictionaries are key-for-key identical. A page cannot be half
- *    translated without this failing, which is the specific failure mode the
- *    brief calls out ("do not leave a page 70% translated").
- * 2. Every key referenced by the landing page's CONTENT TABLES resolves in both
+ *    translated without this failing.
+ * 2. Every key referenced by the homepage's CONTENT TABLES resolves in both
  *    languages — a renamed key is caught here rather than rendering a raw key
- *    like "home.steps.3.title" to a customer.
- * 3. Parameterised strings are only rendered with their values: the phone
- *    number, dealer name and counts are filled in, never left as `{phone}`.
- * 4. Language resolution behaves: `?lang=`, stored preference, Accept-Language
- *    hint and default, in that order — and nothing surprising happens on a
- *    signal it does not understand.
- * 5. The public page and component sources hold no hard-coded English prose
- *    that also exists as a translation. This is the assertion that keeps the
- *    dictionary authoritative as the pages evolve.
+ *    like "home.journey.3.title" to a customer.
+ * 3. Emphasis markers are balanced and applied to the SAME keys in both
+ *    languages, so the mockup's orange closing phrase cannot appear in one
+ *    edition and not the other.
+ * 4. Parameterised strings are only rendered with their values.
+ * 5. Language resolution behaves, and never redirects.
+ * 6. The public page and component sources hold no hard-coded English prose that
+ *    also exists as a translation.
  *
- * Deliberately NOT a snapshot suite: assertions are about keys, resolution and
- * a handful of user-visible labels, so the tests survive copy edits.
+ * Deliberately NOT a snapshot suite: assertions are about keys, resolution and a
+ * handful of user-visible labels, so the tests survive copy edits.
  */
 
 const ALL_KEYS = Object.keys(en) as Array<keyof typeof en>;
-
-/** Keys that carry a `{placeholder}`. */
 const PARAMETERISED = new Set(Object.keys(PARAM_KEYS));
 
 /** The public files that must be dictionary-driven, not English-literal. */
@@ -67,9 +63,9 @@ const LOCALIZED_SOURCES = [
   "src/app/not-found.tsx",
   "src/app/_components/PublicNav.tsx",
   "src/app/_components/PublicFooter.tsx",
+  "src/app/_components/HomeHero.tsx",
   "src/app/_components/PublicVehicleCard.tsx",
   "src/app/_components/VehiclePhotoGallery.tsx",
-  "src/app/_components/LanguageSwitcher.tsx",
 ];
 
 const repoRoot = join(__dirname, "..");
@@ -87,7 +83,7 @@ describe("BILINGUAL — the dictionaries cannot drift apart", () => {
     for (const language of ["en", "es"] as const) {
       const dictionary = dictionaries[language];
       for (const key of ALL_KEYS) {
-        const value = dictionary[key];
+        const value: string = dictionary[key];
         expect(value, `${language}.${key} must be a non-empty string`).toBeTruthy();
         expect(value.trim().length, `${language}.${key} must not be blank`).toBeGreaterThan(0);
       }
@@ -99,7 +95,11 @@ describe("BILINGUAL — the dictionaries cannot drift apart", () => {
       const dictionary = dictionaries[language];
       for (const key of ALL_KEYS) {
         const value: string = dictionary[key];
-        const tokens = [...value.matchAll(/\{(\w+)\}/g)].map((match) => match[1]);
+        const tokens = [...value.matchAll(/\{(\w+)\}/g)]
+          .map((match) => match[1])
+          // `{{emphasis}}` markers are not interpolation parameters.
+          .filter((token) => !value.includes(`${EMPHASIS_OPEN}${token}`));
+
         if (tokens.length === 0) {
           expect(PARAMETERISED.has(key), `${language}.${key} declares no parameters`).toBe(false);
           continue;
@@ -117,62 +117,136 @@ describe("BILINGUAL — the dictionaries cannot drift apart", () => {
 
   it("actually translates: the Spanish edition is not the English text", () => {
     /**
-     * Identical BY DESIGN, and only these two:
-     *  - `spec.stockNumber` is a stock-number label plus dealer data; the token
-     *    "Stock #" is how it is written on a lot's paperwork in both languages.
+     * Identical BY DESIGN, and only these:
+     *  - `spec.stockNumber` is a stock-number label plus dealer data; "Stock #" is
+     *    how it is written on a lot's paperwork in both languages.
      *  - `gallery.counter` is two numbers and a slash.
+     *  - `theme.system` is "Sistema"/"System" — different, so not listed.
      * Anything else matching proves copy was left in English.
      */
     const identicalByDesign = new Set(["spec.stockNumber", "gallery.counter"]);
 
     const identical = ALL_KEYS.filter((key) => {
       if (identicalByDesign.has(key)) return false;
-      const value = en[key];
-      // Proper nouns and tokens legitimately match across languages.
-      return value.length > 12 && /[a-z]/.test(value) && !/^[A-Z0-9#/ •]*$/.test(value) && es[key] === value;
+      const value: string = en[key];
+      return (
+        value.length > 12 &&
+        /[a-z]/.test(value) &&
+        !/^[A-Z0-9#/ •{}]*$/.test(value) &&
+        es[key] === value
+      );
     });
 
     expect(identical, `Untranslated keys: ${identical.join(", ")}`).toEqual([]);
   });
 
   it("keeps the financing promise identical in strength in both languages", () => {
-    // Both editions must state that figures are estimates and not an approval.
+    // Both editions must state that estimates are not an approval.
     expect(en["home.options.disclaimer"].toLowerCase()).toContain("not a guarantee of approval");
-    expect(es["home.options.disclaimer"].toLowerCase()).toContain("no garantiza una aprobación");
+    expect(es["home.options.disclaimer"].toLowerCase()).toContain("ni una garantía de aprobación");
 
-    expect(en["home.options.guided.point2"]).toBe("Estimates, not approvals");
-    expect(es["home.options.guided.point2"]).toBe("Son estimados, no aprobaciones");
+    // And neither edition may promise an outcome.
+    for (const language of ["en", "es"] as const) {
+      const dictionary = dictionaries[language];
+      const claims = [
+        "guaranteed approval",
+        "instant approval",
+        "everyone qualifies",
+        "approved instantly",
+        "aprobación garantizada",
+        "aprobación instantánea",
+        "todos califican",
+      ];
+      for (const key of ALL_KEYS) {
+        const value = dictionary[key].toLowerCase();
+        for (const claim of claims) {
+          expect(value.includes(claim), `${language}.${key} promises "${claim}"`).toBe(false);
+        }
+      }
+    }
   });
 
   it("uses United States Spanish terms a buyer would recognise", () => {
-    expect(es["home.hero.primaryCta"]).toBe("Ver inventario");
-    expect(es["inventory.title"]).toBe("Inventario de vehículos");
-    expect(es["home.steps.eyebrow"]).toBe("Cómo funciona");
-    expect(es["home.options.eyebrow"]).toBe("Opciones de compra");
-    expect(es["card.explore"]).toBe("Ver más");
-    expect(es["spec.mileage"]).toBe("Millaje");
+    expect(es["home.hero.primaryCta"]).toBe("Ver autos");
+    expect(es["home.hero.eyebrow"]).toBe("Comprar tu auto, más simple");
+    expect(es["meta.inventory.title"]).toBe("Inventario");
+    expect(es["nav.howItWorks"]).toBe("Cómo funciona");
     expect(es["card.askingPrice"]).toBe("Precio");
+    expect(es["spec.mileage"]).toBe("Millaje");
+    expect(es["home.inventory.title"]).toBe("Encuentra el auto ideal para tu próxima etapa.");
+  });
+
+  it("matches the approved mockup's headline copy in both languages", () => {
+    expect(plainText(en["home.hero.headline"])).toBe("Better cars.\nA simpler way.");
+    expect(plainText(es["home.hero.headline"])).toBe("Mejores autos.\nUna forma más simple.");
+    expect(plainText(en["home.options.title"])).toBe("Multiple ways to buy.\nOne simple experience.");
+    expect(plainText(es["home.options.title"])).toBe("Diferentes formas de comprar.\nUna experiencia simple.");
+    expect(plainText(en["home.family.title"])).toBe("More than a car.\nA better tomorrow.");
+    expect(plainText(es["home.family.title"])).toBe("Más que un auto.\nUn mejor mañana.");
   });
 });
 
 /* -------------------------------------------------------------------------- */
-/* B. Every key the landing page renders resolves in both languages            */
+/* B. Emphasis (the mockup's orange closing phrase)                            */
+/* -------------------------------------------------------------------------- */
+
+describe("BILINGUAL — emphasis markers", () => {
+  it("marks the same keys in both languages", () => {
+    const marked = (dictionary: typeof en | typeof es) =>
+      ALL_KEYS.filter((key) => dictionary[key].includes(EMPHASIS_OPEN)).sort();
+
+    expect(marked(es)).toEqual(marked(en));
+    // The mockup emphasises exactly these three headlines.
+    expect(marked(en)).toEqual(["home.family.title", "home.hero.headline", "home.options.title"]);
+  });
+
+  it("leaves no unbalanced marker in any value", () => {
+    for (const language of ["en", "es"] as const) {
+      for (const key of ALL_KEYS) {
+        const value: string = dictionaries[language][key];
+        const opens = value.split(EMPHASIS_OPEN).length - 1;
+        const closes = value.split(EMPHASIS_CLOSE).length - 1;
+        expect(opens, `${language}.${key} has unbalanced emphasis markers`).toBe(closes);
+        // An empty emphasised run would render an invisible span.
+        expect(value.includes(`${EMPHASIS_OPEN}${EMPHASIS_CLOSE}`)).toBe(false);
+      }
+    }
+  });
+
+  it("splits into ordered runs and round-trips through plainText", () => {
+    const runs = splitEmphasis("A {{simpler way.}}");
+    expect(runs).toEqual([
+      { text: "A ", emphasised: false },
+      { text: "simpler way.", emphasised: true },
+    ]);
+    expect(runs.map((run) => run.text).join("")).toBe(plainText("A {{simpler way.}}"));
+
+    // A value with no markers is one plain run.
+    expect(splitEmphasis("Plain copy")).toEqual([{ text: "Plain copy", emphasised: false }]);
+  });
+
+  it("keeps line breaks out of the emphasised run", () => {
+    // The two-line headline must break BETWEEN runs, not inside one, or the
+    // orange span would wrap oddly.
+    const runs = splitEmphasis(dictionaries.en["home.hero.headline"]);
+    expect(runs.map((run) => run.text)).toEqual(["Better cars.\nA ", "simpler way."]);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* C. Content tables                                                          */
 /* -------------------------------------------------------------------------- */
 
 describe("BILINGUAL — content tables resolve in both languages", () => {
   const contentKeys = [
-    ...BENEFITS.flatMap((item) => [item.titleKey, item.bodyKey]),
-    ...STEPS.flatMap((item) => [item.titleKey, item.bodyKey]),
-    ...BUYING_OPTIONS.flatMap((item) => [item.titleKey, item.bodyKey, ...item.pointKeys]),
-    ...TRUST_POINTS.flatMap((item) => [item.titleKey, item.bodyKey]),
-    ...HERO_ASSURANCE_KEYS,
-    BENEFIT_CTA_TITLE_KEY,
-    BENEFIT_CTA_BODY_KEY,
-    BENEFIT_CTA_ACTION_KEY,
+    ...JOURNEY_STEPS.flatMap((item) => [item.titleKey, item.bodyKey]),
+    ...BUYING_OPTIONS.flatMap((item) => [item.titleKey, item.bodyKey]),
+    ...HERO_ASSURANCES.flatMap((item) => [item.key, item.bodyKey]),
   ];
 
   it("covers every section the page renders", () => {
-    expect(contentKeys.length).toBeGreaterThan(30);
+    // 4 journey steps + 4 buying options + 3 hero assurances, each with 2 keys.
+    expect(contentKeys.length).toBe(22);
   });
 
   it("has a real translation for each table key, in both languages", () => {
@@ -191,16 +265,20 @@ describe("BILINGUAL — content tables resolve in both languages", () => {
       }
     }
   });
+
+  it("keeps every anchor target the header and footer link to", () => {
+    expect(Object.values(SECTION_IDS)).toEqual(["inventory", "how-it-works", "financing", "about", "contact"]);
+  });
 });
 
 /* -------------------------------------------------------------------------- */
-/* C. Interpolation and plurals                                               */
+/* D. Interpolation, plurals and locale formatting                            */
 /* -------------------------------------------------------------------------- */
 
 describe("BILINGUAL — parameterised copy is always filled in", () => {
   it("fills the phone number instead of leaking the token", () => {
-    expect(translateWith("en", "home.hero.call", { phone: "713-555-0100" })).toBe("Call 713-555-0100");
-    expect(translateWith("es", "home.hero.call", { phone: "713-555-0100" })).toBe("Llama al 713-555-0100");
+    expect(translateWith("en", "vehicle.call", { phone: "713-555-0100" })).toBe("Call 713-555-0100");
+    expect(translateWith("es", "vehicle.call", { phone: "713-555-0100" })).toBe("Llama al 713-555-0100");
   });
 
   it("leaves only undeclared tokens visible, so a bug is obvious rather than silent", () => {
@@ -209,13 +287,13 @@ describe("BILINGUAL — parameterised copy is always filled in", () => {
   });
 
   it("never renders an unfilled placeholder from the public surface keys", () => {
-    // Every parameterised key, rendered through tc() with plausible values.
     const values = {
       vehicle: "2019 Toyota Camry SE",
       mileage: "68,000",
       price: "$18,995",
       family: "Nexo",
       language: "Español",
+      theme: "Oscuro",
       name: "Nexo Auto",
       phone: "713-555-0100",
       stock: "SN-1001",
@@ -238,16 +316,15 @@ describe("BILINGUAL — parameterised copy is always filled in", () => {
   });
 
   it("uses the singular form for one and the plural form otherwise", () => {
-    expect(translateCount("en", "inventory.resultsCount", 1)).toBe("Showing 1 listed vehicle");
-    expect(translateCount("en", "inventory.resultsCount", 3)).toBe("Showing 3 listed vehicles");
-    expect(translateCount("es", "inventory.resultsCount", 1)).toBe("Mostrando 1 vehículo publicado");
-    expect(translateCount("es", "inventory.resultsCount", 4)).toBe("Mostrando 4 vehículos publicados");
+    expect(translateCount("en", "inventory.resultsCount", 1)).toBe("1 vehicle listed");
+    expect(translateCount("en", "inventory.resultsCount", 3)).toBe("3 vehicles listed");
+    expect(translateCount("es", "inventory.resultsCount", 1)).toBe("1 vehículo publicado");
+    expect(translateCount("es", "inventory.resultsCount", 4)).toBe("4 vehículos publicados");
   });
 
   it("formats numbers in the language being rendered", () => {
     expect(strings("en").n(68000)).toBe("68,000");
-    // Spanish (US) also groups with commas; the point is that it goes through
-    // Intl with the request locale rather than a hard-coded "en-US".
+    // The point is that it goes through Intl with the request locale.
     expect(strings("es").n(68000)).toBe((68000).toLocaleString("es"));
   });
 
@@ -259,10 +336,26 @@ describe("BILINGUAL — parameterised copy is always filled in", () => {
       expect(es[pair.other]).toBeTruthy();
     }
   });
+
+  it("exposes emphasis through the bundle, not through markup in the dictionary", () => {
+    const bundle = strings("es");
+    expect(bundle.rich("home.hero.headline")).toEqual([
+      { text: "Mejores autos.\nUna ", emphasised: false },
+      { text: "forma más simple.", emphasised: true },
+    ]);
+    // No dictionary value may contain HTML.
+    for (const language of ["en", "es"] as const) {
+      for (const key of ALL_KEYS) {
+        expect(dictionaries[language][key], `${language}.${key} must not contain HTML`).not.toMatch(
+          /<(span|b|strong|em|br)\b/i,
+        );
+      }
+    }
+  });
 });
 
 /* -------------------------------------------------------------------------- */
-/* D. Language resolution and persistence                                     */
+/* E. Language resolution                                                     */
 /* -------------------------------------------------------------------------- */
 
 describe("BILINGUAL — language preference resolution", () => {
@@ -282,13 +375,6 @@ describe("BILINGUAL — language preference resolution", () => {
     expect(parseLanguage("EN")).toBe("en");
     expect(parseLanguage("de-DE")).toBeNull();
     expect(parseLanguage("")).toBeNull();
-  });
-
-  it("treats an explicit ?lang= as authoritative", () => {
-    // getLanguage() gives the search parameter precedence over cookie and
-    // header; parseLanguage is the gate it uses.
-    expect(parseLanguage("es")).toBe("es");
-    expect(parseLanguage("not-a-language")).toBeNull();
   });
 
   it("honours a clear Accept-Language preference and ignores noise", () => {
@@ -313,7 +399,6 @@ describe("BILINGUAL — language preference resolution", () => {
       const bundle = strings(language);
       expect(bundle.language).toBe(language);
       expect(bundle.t("nav.inventory")).toBe(language === "es" ? "Inventario" : "Inventory");
-      expect(bundle.t("nav.browseCars")).toBe(language === "es" ? "Ver autos" : "Browse cars");
     }
   });
 
@@ -321,18 +406,28 @@ describe("BILINGUAL — language preference resolution", () => {
     expect(translate("en", "nav.inventory")).toBe("Inventory");
     expect(strings("en").t("meta.siteName")).toBe("Nexo Auto");
   });
+
+  it("resolves ?lang= first, then the cookie, then Accept-Language, then default", () => {
+    const resolver = readFileSync(join(repoRoot, "src/lib/i18n/index.ts"), "utf8");
+    const body = resolver.slice(resolver.indexOf("export async function getLanguage"));
+    const searchIndex = body.indexOf("source.searchParam");
+    const cookieIndex = body.indexOf("cookieStore.get(LANGUAGE_COOKIE)");
+    const headerIndex = body.indexOf("languageFromAcceptLanguage");
+    expect(searchIndex).toBeGreaterThan(-1);
+    expect(cookieIndex).toBeGreaterThan(searchIndex);
+    expect(headerIndex).toBeGreaterThan(cookieIndex);
+    expect(body).toContain("DEFAULT_LANGUAGE");
+    // A surprise redirect is explicitly out of bounds.
+    expect(resolver).not.toMatch(/\bredirect\(/);
+  });
 });
 
 /* -------------------------------------------------------------------------- */
-/* E. The pages are dictionary-driven, not English-literal                     */
+/* F. The pages are dictionary-driven, not English-literal                    */
 /* -------------------------------------------------------------------------- */
 
 describe("BILINGUAL — public sources hold no duplicated English prose", () => {
-  /**
-   * English prose that also exists as a translation. If any of it appears as a
-   * bare literal in a public source file, that surface can no longer be
-   * translated — which is exactly the regression this guards.
-   */
+  /** English prose that also exists as a translation. */
   const proseValues = ALL_KEYS.map((key) => en[key]).filter(
     (value) => value.length >= 12 && value.includes(" ") && !value.includes("{") && !value.includes("©"),
   );
@@ -351,69 +446,37 @@ describe("BILINGUAL — public sources hold no duplicated English prose", () => 
 
   it("every public surface that renders copy resolves a language bundle", () => {
     for (const relativePath of LOCALIZED_SOURCES) {
-      // The switcher is exempt: it never renders prose of its own, only the
-      // labels the header/footer already translated and handed to it.
-      if (relativePath.endsWith("LanguageSwitcher.tsx")) continue;
-
       const source = readFileSync(join(repoRoot, relativePath), "utf8");
-      expect(source, `${relativePath} must consume the i18n layer`).toMatch(/strings\(|getPublicStrings/);
+      // Two shapes are valid: a server section that resolves the bundle itself
+      // (`getPublicStrings`), or one that receives the already-built bundle from
+      // its page (`PublicStrings`). Both are dictionary-driven.
+      expect(source, `${relativePath} must consume the i18n layer`).toMatch(
+        /strings\(|getPublicStrings|PublicStrings/,
+      );
     }
-  });
-
-  it("does not let the switcher invent its own copy", () => {
-    const source = readFileSync(join(repoRoot, "src/app/_components/LanguageSwitcher.tsx"), "utf8");
-    // EN/ES tokens and native language names are the only literals allowed here.
-    expect(source).toContain("SUPPORTED_LANGUAGES");
-    expect(source).not.toMatch(/getPublicStrings|strings\(/);
-  });
-
-  it("switches languages with a real server action, not a client closure", () => {
-    // A closure passed to `action` renders `action="javascript:throw ..."` and
-    // breaks the switcher before hydration. The server action must reach the
-    // form so Next can serialise its $ACTION_ID into the markup.
-    const source = readFileSync(join(repoRoot, "src/app/_components/LanguageSwitcher.tsx"), "utf8");
-    expect(source).toContain('action={setLanguageAction}');
-    expect(source).not.toMatch(/action=\{\(/);
-    expect(source).toMatch(/useFormStatus/);
-
-    const actionSource = readFileSync(join(repoRoot, "src/app/actions/language.ts"), "utf8");
-    expect(actionSource).toContain('"use server"');
-    expect(actionSource).toContain("LANGUAGE_COOKIE");
-    expect(actionSource).toContain("parseLanguage");
-  });
-
-  it("persists the choice in a cookie the server can read during render", () => {
-    const resolver = readFileSync(join(repoRoot, "src/lib/i18n/index.ts"), "utf8");
-    // Order matters: ?lang= → stored preference → Accept-Language → default.
-    // Asserted against the resolution block, not the module prose above it.
-    const body = resolver.slice(resolver.indexOf("export async function getLanguage"));
-    const searchIndex = body.indexOf("source.searchParam");
-    const cookieIndex = body.indexOf("cookieStore.get(LANGUAGE_COOKIE)");
-    const headerIndex = body.indexOf("languageFromAcceptLanguage");
-    expect(searchIndex).toBeGreaterThan(-1);
-    expect(cookieIndex).toBeGreaterThan(searchIndex);
-    expect(headerIndex).toBeGreaterThan(cookieIndex);
-    expect(body).toContain("DEFAULT_LANGUAGE");
-  });
-
-  it("never redirects on a language signal", () => {
-    const resolver = readFileSync(join(repoRoot, "src/lib/i18n/index.ts"), "utf8");
-    // A surprise redirect is explicitly out of bounds; the language only
-    // decides which copy renders.
-    expect(resolver).not.toMatch(/\bredirect\(/);
   });
 
   it("names the client-boundary prop `language`, never a helper object", () => {
     // A function-bearing prop on a client component is a runtime error in
-    // Next.js, so this pins the shape that actually works.
+    // Next.js, so this pins the shape that actually works. `Language` may be
+    // required or optional (the operator surfaces default it to English).
     for (const relativePath of [
       "src/app/_components/PublicVehicleCard.tsx",
       "src/app/_components/VehiclePhotoGallery.tsx",
+      "src/app/_components/PublicNav.tsx",
+      "src/app/_components/PublicFooter.tsx",
     ]) {
       const source = readFileSync(join(repoRoot, relativePath), "utf8");
       expect(source, `${relativePath} must take a language code`).toMatch(/language\??:\s*Language/);
-      expect(source, `${relativePath} must rebuild its own bundle`).toContain("strings(language)");
       expect(source, `${relativePath} must not take a strings prop`).not.toMatch(/\bs:\s*PublicStrings/);
+    }
+  });
+
+  it("never renders the emphasis markers raw", () => {
+    // Only RichHeading may interpret them.
+    for (const relativePath of LOCALIZED_SOURCES) {
+      const source = readFileSync(join(repoRoot, relativePath), "utf8");
+      expect(source, `${relativePath} must not hand-roll emphasis`).not.toContain("{{");
     }
   });
 });

@@ -1,160 +1,94 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  ArrowRight,
   BadgeCheck,
   Banknote,
-  Calculator,
   Car,
-  CheckCircle2,
-  ClipboardList,
-  Gauge,
+  Compass,
+  FileText,
   HandCoins,
   KeyRound,
-  MessageSquare,
   Route,
+  Search,
   ShieldCheck,
-  Smartphone,
   Tag,
-  Wallet,
 } from "lucide-react";
 import type { TranslationKey } from "@/lib/i18n/catalog";
 
 /**
- * The landing page's content STRUCTURE — which sections exist, in what order,
- * with which icons and which destination each action points at.
+ * The homepage's content STRUCTURE — which sections exist, in what order, with
+ * which icons and which destination each action points at.
  *
  * Deliberately no prose. Every user-visible string is a translation key, so the
  * English and Spanish editions are the same page with two dictionaries behind
  * it. That is also what makes the copy testable without rendering a page: the
- * key lists below can be checked for completeness in both languages.
+ * key lists below are checked for completeness in both languages.
  *
- * Icons stay here rather than in `src/app/page.tsx` because the icon and its
- * copy belong to the same decision — a card that says "Built for your phone"
- * with a wrench icon is an editorial mistake, and keeping them adjacent makes
- * it a visible one.
+ * SHAPE (from the approved mockup)
+ *   hero → inventory → four-step journey → navy buying-options band →
+ *   Nexo family story → dark footer
+ *
+ * The previous six-card explainer grid is GONE on purpose: the mockup shows cars
+ * early and explains the business in four short steps, and a marketing page for a
+ * dealership should sell the cars, not the software.
  */
 
-export interface Benefit {
-  icon: LucideIcon;
-  titleKey: TranslationKey;
+export interface HeroAssurance {
+  key: TranslationKey;
   bodyKey: TranslationKey;
 }
 
-export const BENEFITS: readonly Benefit[] = [
-  {
-    icon: Tag,
-    titleKey: "home.benefits.pricing.title",
-    bodyKey: "home.benefits.pricing.body",
-  },
-  {
-    icon: Calculator,
-    titleKey: "home.benefits.market.title",
-    bodyKey: "home.benefits.market.body",
-  },
-  {
-    icon: Wallet,
-    titleKey: "home.benefits.options.title",
-    bodyKey: "home.benefits.options.body",
-  },
-  {
-    icon: Smartphone,
-    titleKey: "home.benefits.mobile.title",
-    bodyKey: "home.benefits.mobile.body",
-  },
-  {
-    icon: BadgeCheck,
-    titleKey: "home.benefits.selection.title",
-    bodyKey: "home.benefits.selection.body",
-  },
+/**
+ * Exactly three compact credentials under the hero actions — the mockup's
+ * restraint. Icons support them; they are not the design.
+ */
+export const HERO_ASSURANCES: readonly HeroAssurance[] = [
+  { key: "home.hero.assurancePricing", bodyKey: "home.hero.assurancePricingBody" },
+  { key: "home.hero.assuranceSelection", bodyKey: "home.hero.assuranceSelectionBody" },
+  { key: "home.hero.assuranceFinancing", bodyKey: "home.hero.assuranceFinancingBody" },
 ] as const;
 
-export interface Step {
+export interface JourneyStep {
   icon: LucideIcon;
   titleKey: TranslationKey;
   bodyKey: TranslationKey;
 }
 
-export const STEPS: readonly Step[] = [
-  { icon: Car, titleKey: "home.steps.1.title", bodyKey: "home.steps.1.body" },
-  { icon: ClipboardList, titleKey: "home.steps.2.title", bodyKey: "home.steps.2.body" },
-  { icon: MessageSquare, titleKey: "home.steps.3.title", bodyKey: "home.steps.3.body" },
-  { icon: KeyRound, titleKey: "home.steps.4.title", bodyKey: "home.steps.4.body" },
+/** Four steps, one to two lines each. No walls of text. */
+export const JOURNEY_STEPS: readonly JourneyStep[] = [
+  { icon: Search, titleKey: "home.journey.1.title", bodyKey: "home.journey.1.body" },
+  { icon: Compass, titleKey: "home.journey.2.title", bodyKey: "home.journey.2.body" },
+  { icon: FileText, titleKey: "home.journey.3.title", bodyKey: "home.journey.3.body" },
+  { icon: KeyRound, titleKey: "home.journey.4.title", bodyKey: "home.journey.4.body" },
 ] as const;
 
 export interface BuyingOption {
   icon: LucideIcon;
   titleKey: TranslationKey;
   bodyKey: TranslationKey;
-  pointKeys: readonly TranslationKey[];
 }
-
-export const BUYING_OPTIONS: readonly BuyingOption[] = [
-  {
-    icon: Banknote,
-    titleKey: "home.options.cash.title",
-    bodyKey: "home.options.cash.body",
-    pointKeys: ["home.options.cash.point1", "home.options.cash.point2", "home.options.cash.point3"],
-  },
-  {
-    icon: HandCoins,
-    titleKey: "home.options.finance.title",
-    bodyKey: "home.options.finance.body",
-    pointKeys: [
-      "home.options.finance.point1",
-      "home.options.finance.point2",
-      "home.options.finance.point3",
-    ],
-  },
-  {
-    icon: Calculator,
-    titleKey: "home.options.guided.title",
-    bodyKey: "home.options.guided.body",
-    pointKeys: [
-      "home.options.guided.point1",
-      "home.options.guided.point2",
-      "home.options.guided.point3",
-    ],
-  },
-  {
-    icon: Route,
-    titleKey: "home.options.flexible.title",
-    bodyKey: "home.options.flexible.body",
-    pointKeys: [
-      "home.options.flexible.point1",
-      "home.options.flexible.point2",
-      "home.options.flexible.point3",
-    ],
-  },
-] as const;
-
-export interface TrustPoint {
-  icon: LucideIcon;
-  titleKey: TranslationKey;
-  bodyKey: TranslationKey;
-}
-
-export const TRUST_POINTS: readonly TrustPoint[] = [
-  { icon: ShieldCheck, titleKey: "home.trust.process.title", bodyKey: "home.trust.process.body" },
-  { icon: Gauge, titleKey: "home.trust.car.title", bodyKey: "home.trust.car.body" },
-  { icon: MessageSquare, titleKey: "home.trust.people.title", bodyKey: "home.trust.people.body" },
-  { icon: CheckCircle2, titleKey: "home.trust.pressure.title", bodyKey: "home.trust.pressure.body" },
-] as const;
-
-/** Hero assurance strip: short, verifiable capability statements only. */
-export const HERO_ASSURANCE_KEYS = [
-  "home.hero.assuranceInventory",
-  "home.hero.assurancePricing",
-  "home.hero.assuranceFinancing",
-] as const satisfies readonly TranslationKey[];
-
-/** The sixth benefit cell is a call to action, not another claim. */
-export const BENEFIT_CTA_ICON = ArrowRight;
-export const BENEFIT_CTA_TITLE_KEY: TranslationKey = "home.benefits.cta.title";
-export const BENEFIT_CTA_BODY_KEY: TranslationKey = "home.benefits.cta.body";
-export const BENEFIT_CTA_ACTION_KEY: TranslationKey = "home.benefits.cta.action";
 
 /**
- * Anchor ids used by the header, footer and hero links.
+ * The navy buying-options band.
+ *
+ * These four are the structures the dealership can actually describe today. The
+ * copy for each states the mechanism, never an outcome: "apply with a lender,
+ * with guidance" — not "get approved".
+ */
+export const BUYING_OPTIONS: readonly BuyingOption[] = [
+  { icon: Banknote, titleKey: "home.options.cash.title", bodyKey: "home.options.cash.body" },
+  { icon: HandCoins, titleKey: "home.options.finance.title", bodyKey: "home.options.finance.body" },
+  { icon: FileText, titleKey: "home.options.guided.title", bodyKey: "home.options.guided.body" },
+  { icon: Route, titleKey: "home.options.flexible.title", bodyKey: "home.options.flexible.body" },
+] as const;
+
+/** Icons used by the homepage's own headings and empty states. */
+export const HERO_ICON = Car;
+export const INVENTORY_ICON = Tag;
+export const FAMILY_ICON = ShieldCheck;
+export const BADGE_ICON = BadgeCheck;
+
+/**
+ * Anchor ids used by the header, footer and in-page links.
  *
  * They live here so a link and its target cannot drift: a section renamed in
  * `page.tsx` without updating the constant becomes a visible bug immediately
@@ -162,7 +96,8 @@ export const BENEFIT_CTA_ACTION_KEY: TranslationKey = "home.benefits.cta.action"
  */
 export const SECTION_IDS = {
   inventory: "inventory",
-  whyNexo: "why-nexo",
-  howItWorks: "how-it-works",
-  buyingOptions: "buying-options",
+  journey: "how-it-works",
+  buyingOptions: "financing",
+  family: "about",
+  contact: "contact",
 } as const;
