@@ -11,14 +11,14 @@
 -- write fail at the database level.
 -- ---------------------------------------------------------------------------
 CREATE UNIQUE INDEX "reservations_one_active_per_vehicle"
-  ON "reservations" ("vehicle_id")
+  ON "reservations" ("vehicleId")
   WHERE "status" IN ('PENDING', 'ACTIVE');
 
 -- ---------------------------------------------------------------------------
 -- One live deal per vehicle. Cancelled and lost deals stay as history.
 -- ---------------------------------------------------------------------------
 CREATE UNIQUE INDEX "deals_one_live_per_vehicle"
-  ON "deals" ("vehicle_id")
+  ON "deals" ("vehicleId")
   WHERE "status" NOT IN ('CANCELLED', 'LOST');
 
 -- ---------------------------------------------------------------------------
@@ -26,93 +26,93 @@ CREATE UNIQUE INDEX "deals_one_live_per_vehicle"
 -- ---------------------------------------------------------------------------
 ALTER TABLE "vehicles"
   ADD CONSTRAINT "vehicles_money_non_negative" CHECK (
-    "acquisition_price_cents" >= 0
-    AND "auction_fees_cents" >= 0
-    AND "transportation_cents" >= 0
-    AND "inspection_cents" >= 0
-    AND "other_acquisition_cents" >= 0
-    AND ("recon_override_cents" IS NULL OR "recon_override_cents" >= 0)
-    AND ("target_retail_price_cents" IS NULL OR "target_retail_price_cents" >= 0)
-    AND ("asking_price_cents" IS NULL OR "asking_price_cents" >= 0)
-    AND ("minimum_approved_cents" IS NULL OR "minimum_approved_cents" >= 0)
-    AND ("final_sale_price_cents" IS NULL OR "final_sale_price_cents" >= 0)
+    "acquisitionPriceCents" >= 0
+    AND "auctionFeesCents" >= 0
+    AND "transportationCents" >= 0
+    AND "inspectionCents" >= 0
+    AND "otherAcquisitionCents" >= 0
+    AND ("reconOverrideCents" IS NULL OR "reconOverrideCents" >= 0)
+    AND ("targetRetailPriceCents" IS NULL OR "targetRetailPriceCents" >= 0)
+    AND ("askingPriceCents" IS NULL OR "askingPriceCents" >= 0)
+    AND ("minimumApprovedCents" IS NULL OR "minimumApprovedCents" >= 0)
+    AND ("finalSalePriceCents" IS NULL OR "finalSalePriceCents" >= 0)
   ),
   ADD CONSTRAINT "vehicles_mileage_non_negative" CHECK ("mileage" >= 0),
   ADD CONSTRAINT "vehicles_year_sane" CHECK ("year" BETWEEN 1900 AND 2100),
   ADD CONSTRAINT "vehicles_vin_length" CHECK (char_length("vin") BETWEEN 6 AND 24),
   ADD CONSTRAINT "vehicles_asking_above_minimum" CHECK (
-    "asking_price_cents" IS NULL
-    OR "minimum_approved_cents" IS NULL
-    OR "asking_price_cents" >= "minimum_approved_cents"
+    "askingPriceCents" IS NULL
+    OR "minimumApprovedCents" IS NULL
+    OR "askingPriceCents" >= "minimumApprovedCents"
   ),
   -- A listing must carry a price; the public catalog must never show $0 cars.
   ADD CONSTRAINT "vehicles_active_listing_requires_price" CHECK (
-    "listing_status" <> 'ACTIVE'
-    OR ("asking_price_cents" IS NOT NULL AND "asking_price_cents" > 0)
+    "listingStatus" <> 'ACTIVE'
+    OR ("askingPriceCents" IS NOT NULL AND "askingPriceCents" > 0)
   ),
   -- A sold or delivered vehicle must record what it actually sold for.
   ADD CONSTRAINT "vehicles_sold_requires_final_price" CHECK (
     "status" NOT IN ('SOLD', 'DELIVERED')
-    OR ("final_sale_price_cents" IS NOT NULL AND "final_sale_price_cents" >= 0)
+    OR ("finalSalePriceCents" IS NOT NULL AND "finalSalePriceCents" >= 0)
   ),
   -- GPS coordinates are all-or-nothing.
   ADD CONSTRAINT "vehicles_tracker_coordinates_paired" CHECK (
-    ("tracker_last_latitude" IS NULL AND "tracker_last_longitude" IS NULL)
-    OR ("tracker_last_latitude" IS NOT NULL AND "tracker_last_longitude" IS NOT NULL)
+    ("trackerLastLatitude" IS NULL AND "trackerLastLongitude" IS NULL)
+    OR ("trackerLastLatitude" IS NOT NULL AND "trackerLastLongitude" IS NOT NULL)
   ),
   ADD CONSTRAINT "vehicles_tracker_latitude_range" CHECK (
-    "tracker_last_latitude" IS NULL OR ("tracker_last_latitude" BETWEEN -90 AND 90)
+    "trackerLastLatitude" IS NULL OR ("trackerLastLatitude" BETWEEN -90 AND 90)
   ),
   ADD CONSTRAINT "vehicles_tracker_longitude_range" CHECK (
-    "tracker_last_longitude" IS NULL OR ("tracker_last_longitude" BETWEEN -180 AND 180)
+    "trackerLastLongitude" IS NULL OR ("trackerLastLongitude" BETWEEN -180 AND 180)
   );
 
 ALTER TABLE "vehicle_recon_items"
   ADD CONSTRAINT "recon_money_non_negative" CHECK (
-    "estimate_cents" >= 0 AND ("actual_cost_cents" IS NULL OR "actual_cost_cents" >= 0)
+    "estimateCents" >= 0 AND ("actualCostCents" IS NULL OR "actualCostCents" >= 0)
   ),
   ADD CONSTRAINT "recon_completed_has_date" CHECK (
-    "status" <> 'COMPLETED' OR "completed_at" IS NOT NULL
+    "status" <> 'COMPLETED' OR "completedAt" IS NOT NULL
   );
 
 ALTER TABLE "expenses"
-  ADD CONSTRAINT "expenses_amount_positive" CHECK ("amount_cents" > 0);
+  ADD CONSTRAINT "expenses_amount_positive" CHECK ("amountCents" > 0);
 
 ALTER TABLE "deals"
   ADD CONSTRAINT "deals_money_non_negative" CHECK (
-    "asking_price_cents" >= 0
-    AND ("negotiated_price_cents" IS NULL OR "negotiated_price_cents" >= 0)
-    AND ("sale_price_cents" IS NULL OR "sale_price_cents" >= 0)
-    AND "dealer_fees_cents" >= 0
-    AND ("down_payment_cents" IS NULL OR "down_payment_cents" >= 0)
-    AND ("trade_in_allowance_cents" IS NULL OR "trade_in_allowance_cents" >= 0)
+    "askingPriceCents" >= 0
+    AND ("negotiatedPriceCents" IS NULL OR "negotiatedPriceCents" >= 0)
+    AND ("salePriceCents" IS NULL OR "salePriceCents" >= 0)
+    AND "dealerFeesCents" >= 0
+    AND ("downPaymentCents" IS NULL OR "downPaymentCents" >= 0)
+    AND ("tradeInAllowanceCents" IS NULL OR "tradeInAllowanceCents" >= 0)
   ),
   -- A contracted or delivered deal must state the sale price.
   ADD CONSTRAINT "deals_contracted_requires_sale_price" CHECK (
     "status" NOT IN ('CONTRACTED', 'DELIVERED')
-    OR ("sale_price_cents" IS NOT NULL AND "sale_price_cents" > 0)
+    OR ("salePriceCents" IS NOT NULL AND "salePriceCents" > 0)
   ),
   ADD CONSTRAINT "deals_apr_sane" CHECK (
-    "apr_basis_points" IS NULL OR ("apr_basis_points" >= 0 AND "apr_basis_points" <= 6000)
+    "aprBasisPoints" IS NULL OR ("aprBasisPoints" >= 0 AND "aprBasisPoints" <= 6000)
   ),
   ADD CONSTRAINT "deals_term_sane" CHECK (
-    "term_months" IS NULL OR ("term_months" > 0 AND "term_months" <= 180)
+    "termMonths" IS NULL OR ("termMonths" > 0 AND "termMonths" <= 180)
   );
 
 ALTER TABLE "reservations"
-  ADD CONSTRAINT "reservations_deposit_non_negative" CHECK ("deposit_cents" >= 0);
+  ADD CONSTRAINT "reservations_deposit_non_negative" CHECK ("depositCents" >= 0);
 
 ALTER TABLE "sourcing_candidates"
   ADD CONSTRAINT "sourcing_money_non_negative" CHECK (
-    "asking_price_cents" >= 0
-    AND "expected_auction_fees_cents" >= 0
-    AND "transport_estimate_cents" >= 0
-    AND "estimated_recon_cents" >= 0
-    AND "other_costs_cents" >= 0
-    AND "estimated_retail_cents" >= 0
-    AND "min_gross_profit_cents" >= 0
-    AND "min_roi_basis_points" >= 0
-    AND ("customer_expected_value_cents" IS NULL OR "customer_expected_value_cents" >= 0)
+    "askingPriceCents" >= 0
+    AND "expectedAuctionFeesCents" >= 0
+    AND "transportEstimateCents" >= 0
+    AND "estimatedReconCents" >= 0
+    AND "otherCostsCents" >= 0
+    AND "estimatedRetailCents" >= 0
+    AND "minGrossProfitCents" >= 0
+    AND "minRoiBasisPoints" >= 0
+    AND ("customerExpectedValueCents" IS NULL OR "customerExpectedValueCents" >= 0)
   ),
   ADD CONSTRAINT "sourcing_mileage_non_negative" CHECK ("mileage" IS NULL OR "mileage" >= 0);
 
@@ -122,8 +122,8 @@ ALTER TABLE "sourcing_candidates"
 -- ---------------------------------------------------------------------------
 ALTER TABLE "saved_vehicles"
   ADD CONSTRAINT "saved_vehicles_single_owner" CHECK (
-    ("visitor_key" IS NOT NULL AND "customer_id" IS NULL)
-    OR ("visitor_key" IS NULL AND "customer_id" IS NOT NULL)
+    ("visitorKey" IS NOT NULL AND "customerId" IS NULL)
+    OR ("visitorKey" IS NULL AND "customerId" IS NOT NULL)
   );
 
 -- ---------------------------------------------------------------------------
@@ -131,9 +131,9 @@ ALTER TABLE "saved_vehicles"
 -- ---------------------------------------------------------------------------
 ALTER TABLE "deal_documents"
   ADD CONSTRAINT "deal_documents_has_target" CHECK (
-    "deal_id" IS NOT NULL OR "customer_id" IS NOT NULL OR "vehicle_id" IS NOT NULL
+    "dealId" IS NOT NULL OR "customerId" IS NOT NULL OR "vehicleId" IS NOT NULL
   ),
-  ADD CONSTRAINT "deal_documents_size_sane" CHECK ("size_bytes" >= 0 AND "size_bytes" <= 52428800);
+  ADD CONSTRAINT "deal_documents_size_sane" CHECK ("sizeBytes" >= 0 AND "sizeBytes" <= 52428800);
 
 -- ---------------------------------------------------------------------------
 -- A trade-in candidate must not promise a value: the customer's expectation is
@@ -146,7 +146,7 @@ ALTER TABLE "customers"
 
 ALTER TABLE "leads"
   ADD CONSTRAINT "leads_lost_has_reason" CHECK (
-    "status" <> 'LOST' OR ("lost_reason" IS NOT NULL AND length(trim("lost_reason")) > 0)
+    "status" <> 'LOST' OR ("lostReason" IS NOT NULL AND length(trim("lostReason")) > 0)
   );
 
 ALTER TABLE "users"

@@ -59,50 +59,50 @@ ALTER TABLE "users"                ENABLE ROW LEVEL SECURITY;
 CREATE VIEW "public_vehicle_listings" AS
 SELECT
   v."id",
-  v."stock_number",
+  v."stockNumber",
   v."vin",
   v."year",
   v."make",
   v."model",
   v."trim",
   v."mileage",
-  v."exterior_color",
-  v."interior_color",
+  v."exteriorColor",
+  v."interiorColor",
   v."transmission",
   v."drivetrain",
   v."engine",
-  v."fuel_type",
-  v."body_type",
+  v."fuelType",
+  v."bodyType",
   v."doors",
   v."seats",
-  v."title_status",
-  v."asking_price_cents",
+  v."titleStatus",
+  v."askingPriceCents",
   v."description",
   v."features",
   v."location",
   v."status",
-  v."date_listed",
+  v."dateListed",
   -- Shown as an honest "demo data" badge when seeded inventory is present, so
   -- demo vehicles can never be mistaken for real stock.
-  v."data_origin",
-  v."created_at",
-  v."updated_at"
+  v."dataOrigin",
+  v."createdAt",
+  v."updatedAt"
 FROM "vehicles" v
-WHERE v."listing_status" = 'ACTIVE'
+WHERE v."listingStatus" = 'ACTIVE'
   AND v."status" IN ('LISTED', 'RESERVED')
-  AND v."asking_price_cents" IS NOT NULL
-  AND v."asking_price_cents" > 0;
+  AND v."askingPriceCents" IS NOT NULL
+  AND v."askingPriceCents" > 0;
 
 CREATE VIEW "public_vehicle_photos" AS
 SELECT
   p."id",
-  p."vehicle_id",
+  p."vehicleId",
   p."url",
   p."alt",
-  p."sort_order",
-  p."is_primary"
+  p."sortOrder",
+  p."isPrimary"
 FROM "vehicle_photos" p
-JOIN "public_vehicle_listings" l ON l."id" = p."vehicle_id";
+JOIN "public_vehicle_listings" l ON l."id" = p."vehicleId";
 
 -- Public availability only: never expose who reserved a vehicle or their data.
 CREATE VIEW "public_vehicle_availability" AS

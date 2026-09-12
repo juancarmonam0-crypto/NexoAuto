@@ -1,4 +1,4 @@
-﻿-- CreateSchema
+-- CreateSchema
 CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateEnum
@@ -468,7 +468,7 @@ CREATE TABLE "tasks" (
 );
 
 -- CreateTable
-CREATE TABLE "DealerSettings" (
+CREATE TABLE "dealer_settings" (
     "id" TEXT NOT NULL DEFAULT 'singleton',
     "name" TEXT NOT NULL DEFAULT 'Dealer Digital',
     "tagline" TEXT NOT NULL DEFAULT 'Quality used vehicles, honestly priced.',
@@ -498,7 +498,7 @@ CREATE TABLE "DealerSettings" (
     "aboutText" TEXT,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "DealerSettings_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "dealer_settings_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex

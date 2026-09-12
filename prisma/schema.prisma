@@ -912,4 +912,9 @@ model DealerSettings {
   aboutText     String? @db.Text
 
   updatedAt DateTime @updatedAt
+
+  // Every other model maps its table to snake_case; this one was missing it,
+  // so the table was created as "DealerSettings" while the migration chain
+  // referenced "dealer_settings".
+  @@map("dealer_settings")
 }
