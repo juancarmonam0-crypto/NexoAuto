@@ -405,3 +405,88 @@ export interface PaymentBudgetResultContract {
     jurisdiction: string | null;
   };
 }
+
+// ---------------------------------------------------------------------------
+// MARKET INTELLIGENCE (MarketCheck-powered VIN analysis)
+//
+// ONE round trip returns the market evidence, the conservative retail policy's
+// verdict AND the canonical sourcing evaluation, so Analyze never has to be
+// chained client-side and the browser never sees a provider payload.
+//
+// The economics are IDENTICAL to the manual path: the same `evaluateOpportunity`
+// produces them. Market data only supplies the expected retail input.
+// ---------------------------------------------------------------------------
+
+export interface MarketComparableContract {
+  source: string;
+  vin: string | null;
+  year: number | null;
+  make: string | null;
+  model: string | null;
+  trim: string | null;
+  mileage: number | null;
+  askingPriceCents: number | null;
+  distanceMiles: number | null;
+  dealerName: string | null;
+  dealerType: string | null;
+  listingUrl: string | null;
+  listedDaysAgo: number | null;
+}
+
+export interface MarketValuationContract {
+  provider: string;
+  /** When the evidence was retrieved FROM THE PROVIDER. */
+  generatedAtIso: string;
+  /** False when this snapshot came out of Nexo's cache rather than the provider. */
+  retrievedLive: boolean;
+  cacheTtlMinutes: number;
+  predictedPriceCents: number | null;
+  predictedLowCents: number | null;
+  predictedHighCents: number | null;
+  /** What the provider said exists, which can exceed what it returned. */
+  comparableCountReported: number;
+  comparables: MarketComparableContract[];
+  notes: string[];
+}
+
+export interface ConservativeRetailContract {
+  /** The figure the economics engine uses. Null means "no market evidence". */
+  retailCents: number | null;
+  source: string;
+  confidence: string | null;
+  /** The market-only number, preserved even when the operator overrode it. */
+  marketEstimateCents: number | null;
+  overridden: boolean;
+  policyVersion: string;
+  reasons: string[];
+  warnings: string[];
+  evidence: {
+    predictedPriceCents: number | null;
+    comparableMedianAskingCents: number | null;
+    comparableLowAskingCents: number | null;
+    comparableHighAskingCents: number | null;
+    comparablesUsed: number;
+    comparablesFilteredByMileage: number;
+    comparablesTotal: number;
+    mileageBand: number;
+  };
+}
+
+export interface MarketAnalysisContract {
+  /** Null when the market layer could not answer; the manual flow then applies. */
+  market: MarketValuationContract | null;
+  /** Operator-facing reason the market layer is unavailable. Never a guess. */
+  marketUnavailableReason: string | null;
+  retail: ConservativeRetailContract;
+  /** The canonical sourcing evaluation — the same engine the manual path uses. */
+  evaluation: OpportunityEvaluationContract | null;
+  echo: {
+    vin: string | null;
+    mileage: number | null;
+    askingPriceCents: number;
+    expectedRetailCents: number | null;
+    retailSource: string;
+    asOfIso: string;
+    jurisdiction: string | null;
+  };
+}

@@ -767,4 +767,86 @@ ACTUAL PROFIT .......................................... final sale price - land
 
 ---
 
+## SECTION 15 — MARKET INTELLIGENCE V1 (the phase after Phase 9)
+
+Added in the commit `feat(acquisition): add market-informed vehicle analysis`, on top of the Phase 9 commit.
+Recorded here so the canonical document does not go silent about shipped code.
+
+### What it does
+
+BUY Analyze no longer depends primarily on the operator inventing an expected retail value. The flow is now
+VIN → decode → mileage → asking price → **market valuation** → comparables → the **same** Nexo economics →
+landed cost, gross, ROI, MAX BUY, verdict.
+
+```
+MARKET DATA ESTIMATES WHAT THE VEHICLE IS WORTH.
+NEXO DECIDES WHAT WE CAN AFFORD TO PAY.
+```
+
+The economics engine is untouched: `evaluateOpportunity()` still produces the verdict, the ceiling and the
+reasons, with the dealership's own thresholds. Market data supplies one input — the expected retail.
+
+### The layers
+
+| Layer | File | Responsibility |
+|---|---|---|
+| Provider | `src/lib/providers/marketcheck.ts` | Server-only. Reads `MARKETCHECK_API_KEY`, calls MarketCheck, normalizes to `MarketValuationSnapshot`, caches, and refuses to invent anything. |
+| Contract | `src/lib/providers/types.ts` | `MarketValuationProvider`, `MarketValuationSnapshot`, `MarketComparable` — the vendor-neutral shape, so a second provider needs no change to Analyze. |
+| Policy | `src/lib/market-valuation.ts` | `deriveConservativeRetail()` — the documented, deterministic, LLM-free rule that turns market evidence into one retail assumption. |
+| Boundary | `src/app/actions/buy.ts` → `analyzeMarketAction` | One round trip: market evidence + conservative retail + the canonical evaluation. |
+| UI | `src/app/_components/BuyAnalyzer.tsx` | The MARKET/DEAL/verdict surface, the AUTO vs MANUAL indicator, freshness, comparables, and the unavailable state. |
+
+### Verified provider facts (official docs, and NOT guessed)
+
+Host `https://api.marketcheck.com` + `/v2/`; authentication is the **`api_key` query parameter** (no documented
+key header). Compatible inventory: `GET /v2/search/car/active` → `{ num_found, listings[] }`, with nested
+`build.*`, nested `dealer.name` / `dealer.dealer_type`, `dist` for distance, `vdp_url`, `dom`. Prediction:
+`GET /v2/predict/car/us/marketcheck_price`, response field **`marketcheck_price`** (there is no `price_range`
+field and no `predicted_price`; the legacy `/predict/car/us/price` path returns 404). `rows` is capped at 50
+(above it the API silently returns 10). Country defaults to `us`; Canada mirrors under `/ca/`.
+
+Two findings shaped the implementation:
+
+* **The prediction is a separately priced product** and answers **403** when the plan lacks it, so it is
+  attempted but never depended on: a 403 degrades to comparable-only evidence with a note.
+* **`append_api_key` defaults to true**, meaning the API appends the caller's key to the URLs it returns. Every
+  request now sends `append_api_key=false` *and* every returned URL is scrubbed, because handing a listing link
+  to a browser would otherwise publish the credential.
+
+### The conservative retail policy (v1)
+
+| Constant | Value | Why |
+|---|---|---|
+| `PREDICTION_HAIRCUT_BASIS_POINTS` | 200 (2%) | A prediction is a model output, not an offer. |
+| `COMPARABLE_ASKING_HAIRCUT_BASIS_POINTS` | 300 (3%) | An advertised price is the seller's hope, not a sold price. |
+| `MIN_COMPARABLES_FOR_DISTRIBUTION` | 3 | Below this, two hopeful listings would move an acquisition price. |
+| `MILEAGE_RELEVANCE_BAND_BASIS_POINTS` | 2500 (25%, min 10,000 miles) | Only comparables near the subject's odometer are evidence. |
+| `SOURCE_AGREEMENT_BAND_BASIS_POINTS` | 1000 | Two sources "agree" within 10%; that raises confidence, never the price. |
+
+Order: a manual override wins and is labelled; otherwise each available source is discounted, the **LOWER** of
+them is taken, and the result rounds **DOWN** to whole dollars. No source usable ⇒ `source: "none"` and a null
+retail, so Analyze falls back to the operator's own number rather than to a guess. Confidence is derived from
+source agreement and never changes the number.
+
+### Caching and freshness
+
+An in-memory, per-server-instance cache keyed by VIN + identity + mileage + ZIP, TTL
+`MARKETCHECK_CACHE_TTL_MINUTES` default **1440 minutes (24 hours)**, capped at one week. It exists to stop the
+same VIN being queried twice, which is the real quota risk (the free tier is 500 calls/month, account-wide).
+Every snapshot carries `generatedAt` and `retrievedLive`, so cached evidence is never presented as newly
+retrieved, and "Refresh market data" bypasses the cache deliberately.
+
+### Failure behaviour
+
+Missing key, 401, 403, 429 (with `Retry-After`), 422, 5xx, timeout, unreachable, malformed body and zero
+comparables each produce a specific operator-facing reason and **MARKET DATA UNAVAILABLE**, with the manual
+expected-retail flow intact. A provider failure can never become a BUY.
+
+### Schema
+
+**No schema change and no migration.** Market snapshots are not persisted; there is no new table and no edited
+historical migration. `0006` remains the only pending production migration.
+
+---
+
 **NEXO AUTO PHASE 9 CANONICAL HANDOFF READY FOR REVIEW**

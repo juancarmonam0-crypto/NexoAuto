@@ -13,6 +13,9 @@ import type {
 import { providerUnavailable } from "./types";
 import { vinDecodeProvider } from "./vin-decode";
 import { gpsProvider } from "./traccar";
+import { marketCacheTtlMinutes, marketValuationProvider } from "./marketcheck";
+
+export { marketCacheTtlMinutes, marketValuationProvider };
 
 /**
  * Providers that are deliberately NOT implemented.
@@ -121,6 +124,13 @@ export function providerSummaries(): ProviderSummary[] {
       label: valuationProvider.label,
       availability: valuationProvider.availability(),
       requirement: valuationProvider.requirement,
+    },
+    {
+      key: "market-intelligence",
+      label: "Market intelligence (MarketCheck)",
+      availability: marketValuationProvider.availability(),
+      requirement:
+        "Requires MARKETCHECK_API_KEY. Without it Analyze still works: the expected retail value is entered by hand. With it, Analyze prices the car against live comparable listings.",
     },
     {
       key: "auction-feed",

@@ -2,6 +2,9 @@
 
 import { type ActionResult, runOperation } from "@/lib/action-result";
 import type {
+  MarketAnalysisContract,
+  MarketComparableContract,
+  MarketValuationContract,
   OpportunityEvaluationContract,
   SourcingCandidateContract,
   SourcingDecisionContract,
@@ -10,6 +13,7 @@ import type {
 } from "@/lib/boundary/contracts";
 import {
   enumField,
+  formBoolean,
   optionalFormCents,
   optionalFormDate,
   optionalFormInt,
@@ -18,6 +22,8 @@ import {
   requireFormInt,
   requireFormString,
 } from "@/lib/forms";
+import { centsToDecimalString } from "@/lib/money";
+import { deriveConservativeRetail } from "@/lib/market-valuation";
 import {
   ACQUISITION_SOURCES,
   DECIDABLE_CANDIDATE_STATUSES,
@@ -32,6 +38,9 @@ import {
   updateSourcingCandidate,
 } from "@/lib/operations";
 import { operationContext } from "@/lib/operations/runtime";
+import { marketCacheTtlMinutes, marketValuationProvider } from "@/lib/providers/registry";
+import type { MarketComparable, MarketValuationSnapshot } from "@/lib/providers/types";
+import { normalizeVin } from "@/lib/providers/vin-decode";
 import { getDealerSettings } from "@/lib/settings";
 import type { SourcingEvaluation } from "@/lib/sourcing";
 
@@ -218,6 +227,178 @@ export async function decodeVinAction(formData: FormData): Promise<ActionResult<
       engine: result.data?.engine,
       bodyType: result.data?.bodyType,
       message: result.message,
+    };
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* MARKET INTELLIGENCE — market evidence feeding the SAME economics engine     */
+/* -------------------------------------------------------------------------- */
+
+/** A copy of the form with the expected retail replaced by the derived figure. */
+function withExpectedRetail(formData: FormData, retailCents: number): FormData {
+  const copy = new FormData();
+  for (const [key, value] of formData.entries()) copy.append(key, value);
+  copy.set("estimatedRetail", centsToDecimalString(retailCents));
+  return copy;
+}
+
+function marketComparableContract(comparable: MarketComparable): MarketComparableContract {
+  return {
+    source: comparable.source,
+    vin: comparable.vin ?? null,
+    year: comparable.year ?? null,
+    make: comparable.make ?? null,
+    model: comparable.model ?? null,
+    trim: comparable.trim ?? null,
+    mileage: comparable.mileage ?? null,
+    askingPriceCents: comparable.askingPriceCents ?? null,
+    distanceMiles: comparable.distanceMiles ?? null,
+    dealerName: comparable.dealerName ?? null,
+    dealerType: comparable.dealerType ?? null,
+    listingUrl: comparable.listingUrl ?? null,
+    listedDaysAgo: comparable.listedDaysAgo ?? null,
+  };
+}
+
+/**
+ * VIN + mileage + asking price -> market evidence -> conservative expected retail
+ * -> the canonical acquisition verdict. ONE round trip, so Analyze cannot be
+ * chained into an inconsistent state client-side.
+ *
+ * WHAT THIS DOES NOT DO
+ * It does not value the car itself and it does not price the deal. The provider
+ * estimates what the vehicle is WORTH; `deriveConservativeRetail` decides how
+ * much of that estimate we are willing to assume; and `evaluateOpportunity` —
+ * the very same pure engine the manual Analyze path calls, with the same
+ * dealership thresholds — decides what we can AFFORD TO PAY. No formula from
+ * that engine is re-implemented here.
+ *
+ * WHEN THE MARKET CANNOT ANSWER
+ * The result carries `market: null` and a reason, and the evaluation still runs
+ * from the operator's manual expected retail. Market failure never blocks the
+ * workflow and never turns into a BUY.
+ *
+ * Capability: `sourcing:read`.
+ */
+export async function analyzeMarketAction(
+  formData: FormData,
+): Promise<ActionResult<MarketAnalysisContract>> {
+  return runOperation("buy.analyzeMarket", async () => {
+    const ctx = await operationContext("sourcing:read");
+
+    const vinInput = optionalFormString(formData, "vin");
+    const vin = vinInput === undefined ? undefined : normalizeVin(vinInput);
+    const mileage = optionalFormInt(formData, "mileage", "Mileage") ?? 0;
+    const year = optionalFormInt(formData, "year", "Year");
+    const make = optionalFormString(formData, "make");
+    const model = optionalFormString(formData, "model");
+    const trim = optionalFormString(formData, "trim");
+    const manualRetailCents = optionalFormCents(formData, "manualRetail", "Manual expected retail") ?? null;
+    const refresh = formBoolean(formData, "refreshMarket");
+
+    const settings = await getDealerSettings(ctx.db);
+    const zip = optionalFormString(formData, "marketZip") ?? settings.postalCode ?? undefined;
+
+    // ---- 1. market evidence (never a guess, never a fabricated snapshot)
+    let snapshot: MarketValuationSnapshot | null = null;
+    let marketUnavailableReason: string | null = null;
+
+    const availability = marketValuationProvider.availability();
+    if (availability.status === "unavailable") {
+      marketUnavailableReason = availability.reason;
+    } else if (vin === undefined && (year === undefined || make === undefined || model === undefined)) {
+      marketUnavailableReason =
+        "Enter a VIN — or the year, make and model — so the market can be searched for this vehicle.";
+    } else {
+      const result = await marketValuationProvider.valuate({
+        vin: vin ?? "",
+        mileage,
+        zip: zip ?? undefined,
+        year,
+        make,
+        model,
+        trim,
+        // The operator's deliberate "Refresh market data" must actually reach the
+        // provider, otherwise the button would be a lie.
+        forceRefresh: refresh,
+      });
+      if (result.status === "ok" && result.data !== undefined) {
+        snapshot = result.data;
+      } else {
+        marketUnavailableReason = result.message ?? "Market data is unavailable right now.";
+      }
+    }
+
+    // ---- 2. the conservative retail policy (pure, deterministic, no LLM)
+    const retail = deriveConservativeRetail({ snapshot, mileage, manualRetailCents });
+
+    // ---- 3. the EXISTING engine, unchanged, with the derived retail injected
+    const thresholds = resolveSourcingThresholds(settings);
+    const evaluation =
+      retail.retailCents === null
+        ? null
+        : evaluationContract(
+            evaluateOpportunity(
+              {
+                ...opportunityFromForm(withExpectedRetail(formData, retail.retailCents)),
+                minGrossProfitCents: optionalFormCents(formData, "minGrossProfit", "Minimum gross profit"),
+                minRoiBasisPoints: optionalFormInt(formData, "minRoi", "Minimum ROI (basis points)"),
+              },
+              thresholds,
+            ),
+          );
+
+    const evidence = retail.evidence.comparableSummary;
+    const market: MarketValuationContract | null =
+      snapshot === null
+        ? null
+        : {
+            provider: snapshot.provider,
+            generatedAtIso: snapshot.generatedAt.toISOString(),
+            retrievedLive: snapshot.retrievedLive,
+            cacheTtlMinutes: marketCacheTtlMinutes(),
+            predictedPriceCents: snapshot.predictedPriceCents,
+            predictedLowCents: snapshot.predictedLowCents,
+            predictedHighCents: snapshot.predictedHighCents,
+            comparableCountReported: snapshot.comparableCountReported,
+            comparables: snapshot.comparables.map(marketComparableContract),
+            notes: snapshot.notes,
+          };
+
+    return {
+      market,
+      marketUnavailableReason,
+      retail: {
+        retailCents: retail.retailCents,
+        source: retail.source,
+        confidence: retail.confidence,
+        marketEstimateCents: retail.marketEstimateCents,
+        overridden: retail.overridden,
+        policyVersion: retail.policyVersion,
+        reasons: retail.reasons,
+        warnings: retail.warnings,
+        evidence: {
+          predictedPriceCents: retail.evidence.predictedPriceCents,
+          comparableMedianAskingCents: evidence?.medianAskingCents ?? null,
+          comparableLowAskingCents: evidence?.lowAskingCents ?? null,
+          comparableHighAskingCents: evidence?.highAskingCents ?? null,
+          comparablesUsed: evidence?.used ?? 0,
+          comparablesFilteredByMileage: evidence?.filteredByMileage ?? 0,
+          comparablesTotal: evidence?.total ?? 0,
+          mileageBand: evidence?.mileageBand ?? 0,
+        },
+      },
+      evaluation,
+      echo: {
+        vin: vin ?? null,
+        mileage: mileage > 0 ? mileage : null,
+        askingPriceCents: optionalFormCents(formData, "askingPrice", "Asking price") ?? 0,
+        expectedRetailCents: retail.retailCents,
+        retailSource: retail.source,
+        asOfIso: new Date().toISOString(),
+        jurisdiction: null,
+      },
     };
   });
 }

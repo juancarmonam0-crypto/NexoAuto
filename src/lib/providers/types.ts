@@ -112,6 +112,93 @@ export interface VehicleValuationProvider {
 }
 
 // ---------------------------------------------------------------------------
+// Market intelligence (MarketCheck class of data)
+//
+// The ECONOMIC ENGINE NEVER SEES A PROVIDER RESPONSE. Everything below is the
+// normalized shape a provider must produce, so the acquisition maths cannot
+// become coupled to one vendor's field names and a second provider can be
+// dropped in without touching Analyze.
+//
+// Two rules, inherited from the rest of this file:
+//   - a provider that cannot answer returns `unavailable`/`error`, never a guess
+//   - every value carries the provider it came from and when it was retrieved
+// ---------------------------------------------------------------------------
+
+/** One comparable vehicle offered for sale in the market. */
+export interface MarketComparable {
+  /** Provider that supplied this row. */
+  source: string;
+  vin?: string;
+  year?: number;
+  make?: string;
+  model?: string;
+  trim?: string;
+  mileage?: number;
+  /** The ADVERTISED price. Advertised is not sold; the policy accounts for that. */
+  askingPriceCents?: number;
+  distanceMiles?: number;
+  dealerName?: string;
+  /** "franchise" | "independent" | provider's own wording. */
+  dealerType?: string;
+  listingUrl?: string;
+  /** How long the listing has been advertised, when the provider reports it. */
+  listedDaysAgo?: number;
+}
+
+export interface MarketValuationRequest {
+  vin: string;
+  mileage: number;
+  /** Market region, when the dealer has one configured. */
+  zip?: string;
+  /**
+   * Bypass Nexo's own cache and ask the provider again. Set by the operator's
+   * deliberate "Refresh market data" action: without it the flag would be
+   * collected in the UI and silently ignored, which is worse than not offering
+   * the button at all.
+   */
+  forceRefresh?: boolean;
+  /** Fallbacks used only when the VIN alone is not enough to search the market. */
+  year?: number;
+  make?: string;
+  model?: string;
+  trim?: string;
+}
+
+/**
+ * A retrieval of market evidence, normalized.
+ *
+ * `predictedPriceCents` is the provider's own estimate and is NULL when the
+ * provider (or the plan) does not offer one — never a number we invented from
+ * the comparable prices.
+ */
+export interface MarketValuationSnapshot {
+  vin: string;
+  provider: string;
+  /** When the evidence was RETRIEVED from the provider. */
+  generatedAt: Date;
+  /** False when this snapshot was served from Nexo's own cache. */
+  retrievedLive: boolean;
+  predictedPriceCents: number | null;
+  predictedLowCents: number | null;
+  predictedHighCents: number | null;
+  /** How many comparables the provider said exist, even if fewer were returned. */
+  comparableCountReported: number;
+  comparables: MarketComparable[];
+  /** Provider-reported facts worth showing, in the provider's own words. */
+  notes: string[];
+}
+
+export interface MarketValuationProvider {
+  readonly name: string;
+  availability(): ProviderAvailability;
+  /**
+   * Retrieves market evidence for one vehicle. MUST NOT throw for a provider
+   * failure: return `unavailable` or `error` so Analyze can fall back.
+   */
+  valuate(request: MarketValuationRequest): Promise<ProviderResult<MarketValuationSnapshot>>;
+}
+
+// ---------------------------------------------------------------------------
 // Auction / marketplace feeds
 // ---------------------------------------------------------------------------
 
