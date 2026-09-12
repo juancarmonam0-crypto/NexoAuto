@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { authorize, authorizeAny } from "@/lib/auth/guards";
+import { authorize, authorizeAny, requireCapability } from "@/lib/auth/guards";
 import type { Capability } from "@/lib/auth/roles";
 import type { OperationContext } from "./context";
 
@@ -39,4 +39,17 @@ export async function operationContextForStaff(): Promise<OperationContext> {
     "sourcing:read",
     "reports:read",
   ]);
+}
+
+/**
+ * The adapter for SERVER COMPONENTS (pages and layouts).
+ *
+ * Identical context, different failure mode: a page cannot "return an error",
+ * so an unauthorized visitor is REDIRECTED by the existing page guards instead
+ * of receiving a thrown error that would render as a 500. Pages therefore call
+ * this, and server actions call `operationContext()`.
+ */
+export async function pageOperationContext(capability: Capability): Promise<OperationContext> {
+  const user = await requireCapability(capability);
+  return { actor: user, db: prisma };
 }

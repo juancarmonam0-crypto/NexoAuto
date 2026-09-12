@@ -75,14 +75,14 @@ export async function requireFinancialAccess(): Promise<SessionUser> {
 /** Action guard: throws AuthorizationError instead of redirecting. */
 export async function authorize(capability: Capability): Promise<SessionUser> {
   const user = await getCurrentUser();
-  if (!user) throw new AuthorizationError("Your session has expired. Please sign in again.");
+  if (!user) throw new AuthorizationError("Your session has expired. Please sign in again.", "unauthenticated");
   if (!hasCapability(user.role, capability)) throw new AuthorizationError();
   return user;
 }
 
 export async function authorizeAny(capabilities: readonly Capability[]): Promise<SessionUser> {
   const user = await getCurrentUser();
-  if (!user) throw new AuthorizationError("Your session has expired. Please sign in again.");
+  if (!user) throw new AuthorizationError("Your session has expired. Please sign in again.", "unauthenticated");
   if (!hasAnyCapability(user.role, capabilities)) throw new AuthorizationError();
   return user;
 }

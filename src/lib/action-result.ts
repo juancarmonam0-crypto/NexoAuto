@@ -3,6 +3,34 @@ import { AuthorizationError } from "@/lib/auth/errors";
 import { DomainError } from "@/lib/domain-errors";
 
 /**
+ * Stable, browser-safe error codes.
+ *
+ * The UI switches on these, never on message text: a message is written for an
+ * operator and may be reworded, while a code is part of the contract. They are
+ * deliberately coarse — the UI needs to know *what to do* (re-authenticate,
+ * show a field error, offer a different state), not which layer failed.
+ */
+export const ACTION_ERROR_CODES = [
+  "VALIDATION_ERROR",
+  "UNAUTHORIZED",
+  "FORBIDDEN",
+  "NOT_FOUND",
+  "CONFLICT",
+  "INVALID_STATE",
+  "INTERNAL_ERROR",
+] as const;
+
+export type ActionErrorCode = (typeof ACTION_ERROR_CODES)[number];
+
+/** The failure half of an ActionResult. */
+export interface ActionFailure {
+  ok: false;
+  error: string;
+  code: ActionErrorCode;
+  fieldErrors?: Record<string, string[]>;
+}
+
+/**
  * Typed result for every server action and public form handler.
  *
  * Actions never throw at the UI: they return a discriminated result so the form
@@ -11,7 +39,7 @@ import { DomainError } from "@/lib/domain-errors";
  */
 export type ActionResult<T = undefined> =
   | ({ ok: true } & (T extends undefined ? { data?: undefined } : { data: T }))
-  | { ok: false; error: string; fieldErrors?: Record<string, string[]> };
+  | ActionFailure;
 
 export function actionOk(): ActionResult<undefined>;
 export function actionOk<T>(data: T): ActionResult<T>;
@@ -19,8 +47,13 @@ export function actionOk<T>(data?: T): ActionResult<T> {
   return { ok: true, data } as ActionResult<T>;
 }
 
-export function actionFail(error: string, fieldErrors?: Record<string, string[]>): ActionResult<never> {
-  return fieldErrors ? { ok: false, error, fieldErrors } : { ok: false, error };
+export function actionFail(
+  error: string,
+  options: { code?: ActionErrorCode; fieldErrors?: Record<string, string[]> } = {},
+): ActionFailure {
+  const failure: ActionFailure = { ok: false, error, code: options.code ?? "INTERNAL_ERROR" };
+  if (options.fieldErrors) failure.fieldErrors = options.fieldErrors;
+  return failure;
 }
 
 /** Raised by action code for expected, user-facing failures. */
@@ -61,7 +94,7 @@ export async function runAction<T>(
   try {
     return await fn();
   } catch (error) {
-    return actionFail(describeActionError(error, scope));
+    return failureFrom(error, scope);
   }
 }
 
@@ -80,8 +113,47 @@ export async function runOperation<T>(
   try {
     return actionOk(await fn());
   } catch (error) {
-    return actionFail(describeActionError(error, scope));
+    return failureFrom(error, scope);
   }
+}
+
+/** Builds the browser-facing failure for a thrown error. */
+export function failureFrom(error: unknown, scope: string): ActionFailure {
+  return actionFail(describeActionError(error, scope), {
+    code: actionErrorCode(error),
+    fieldErrors: actionFieldErrors(error),
+  });
+}
+
+/**
+ * Classifies an error for the UI. Order matters: the typed domain errors are
+ * checked before the generic `code` probe, because several of these classes
+ * carry their own unrelated `code` property.
+ */
+export function actionErrorCode(error: unknown): ActionErrorCode {
+  if (error instanceof AuthorizationError) {
+    return error.reason === "unauthenticated" ? "UNAUTHORIZED" : "FORBIDDEN";
+  }
+  if (error instanceof ZodError) return "VALIDATION_ERROR";
+  if (error instanceof DomainError) {
+    if (error.code === "NOT_FOUND") return "NOT_FOUND";
+    if (error.code === "CONFLICT") return "CONFLICT";
+    return "VALIDATION_ERROR";
+  }
+  if (error instanceof ActionError) return "VALIDATION_ERROR";
+
+  const code = (error as { code?: unknown } | null)?.code;
+  if (typeof code === "string" && OPERATOR_FACING_CODES.has(code)) return "INVALID_STATE";
+
+  if (isPrismaUniqueViolation(error)) return "CONFLICT";
+  if (isPrismaCheckViolation(error)) return "VALIDATION_ERROR";
+  return "INTERNAL_ERROR";
+}
+
+function actionFieldErrors(error: unknown): Record<string, string[]> | undefined {
+  if (error instanceof ZodError) return zodFieldErrors(error);
+  if (error instanceof ActionError) return error.fieldErrors;
+  return undefined;
 }
 
 /**
