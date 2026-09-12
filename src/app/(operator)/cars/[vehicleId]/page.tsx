@@ -17,16 +17,21 @@ import { formatBasisPoints, formatCents } from "@/lib/money";
 import { EXPENSE_CATEGORIES, getVehicleDetail } from "@/lib/operations";
 import { pageOperationContext } from "@/lib/operations/runtime";
 import { allowedTransitions, STATUS_LABELS } from "@/lib/vehicle-status";
-
-/**
- * CARS — vehicle detail and the inventory mutations.
- *
- * Every form posts to a server action that re-authorizes and delegates. The
- * capability checks below decide what to RENDER; they are not the security
- * boundary. The expense and recon sections are absent entirely for a role that
- * may not read them, because the operation omits those rows rather than masking
- * them field by field.
- */
+import { StatusBadge } from "@/app/_components/StatusBadge";
+import { MoneyMetric } from "@/app/_components/MoneyMetric";
+import { VehiclePhotoGallery } from "@/app/_components/VehiclePhotoGallery";
+import {
+  Car,
+  ChevronRight,
+  DollarSign,
+  Wrench,
+  Camera,
+  History,
+  Tag,
+  FileText,
+  Clock,
+  ExternalLink,
+} from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -44,328 +49,602 @@ export default async function VehiclePage({ params }: PageProps) {
   const canPrice = hasCapability(ctx.actor.role, "pricing:write");
   const canExpense = hasCapability(ctx.actor.role, "expenses:write");
   const canRecon = hasCapability(ctx.actor.role, "recon:write");
+  const canSeeFinance = hasCapability(ctx.actor.role, "finance:read");
+
+  const title = `${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ` ${vehicle.trim}` : ""}`;
 
   return (
-    <>
-      <p>
-        <Link href="/cars">← CARS</Link>
-      </p>
-      <h1>
-        {vehicle.year} {vehicle.make} {vehicle.model} {vehicle.trim ?? ""}
-      </h1>
-      <p className="muted">
-        {vehicle.stockNumber} · VIN {vehicle.vin} · {vehicle.status} / {vehicle.listingStatus}
-        {detail.publiclyVisible ? " · publicly visible" : ""}
-      </p>
-
-      <div className="card">
-        <div className="row">
-          <span>Asking {formatCents(vehicle.askingPriceCents)}</span>
-          <span>Target {formatCents(vehicle.targetRetailPriceCents)}</span>
-          <span>Minimum {formatCents(vehicle.minimumApprovedCents)}</span>
-          <span>Landed {formatCents(vehicle.landedCostCents)}</span>
-          <span>Est. gross {formatCents(vehicle.estimatedGrossProfitCents)}</span>
-          <span>Actual gross {formatCents(vehicle.actualGrossProfitCents)}</span>
-          <span>ROI {formatBasisPoints(vehicle.actualRoiBasisPoints ?? vehicle.estimatedRoiBasisPoints, 1)}</span>
-          <span>Days {vehicle.daysInInventory ?? "—"}</span>
+    <div className="space-y-6">
+      {/* Breadcrumb & Top Command Bar */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+          <Link href="/cars" className="hover:text-orange-600 transition-colors">
+            CARS Fleet
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+          <span className="text-slate-800 font-semibold">{title}</span>
         </div>
-        <p className="muted">
-          A dash means either &ldquo;not recorded&rdquo; or &ldquo;not visible to your role&rdquo;. Cost, floor and
-          margin are withheld unless your role holds finance:read.
-        </p>
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">{title}</h1>
+              <StatusBadge status={vehicle.status} size="md" />
+              <StatusBadge
+                status={vehicle.listingStatus === "ACTIVE" ? "LISTED" : "UNLISTED"}
+                variant={vehicle.listingStatus === "ACTIVE" ? "success" : "neutral"}
+                size="md"
+              />
+              {detail.publiclyVisible && (
+                <span className="inline-flex items-center gap-1 text-xs text-emerald-800 font-mono bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                  <ExternalLink className="w-3 h-3" />
+                  <span>Storefront Live</span>
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-3 text-xs font-mono text-slate-500">
+              <span>Stock #{vehicle.stockNumber}</span>
+              <span>•</span>
+              <span>VIN: {vehicle.vin}</span>
+              <span>•</span>
+              <span>{vehicle.daysInInventory ?? 0} days in stock</span>
+            </div>
+          </div>
+
+          {/* Quick Publish / Unpublish Action */}
+          {canPrice && (
+            <div className="flex items-center gap-2">
+              {vehicle.listingStatus === "ACTIVE" ? (
+                <ActionForm
+                  action={unpublishVehicleAction}
+                  submitLabel="Unpublish Listing"
+                  successMessage="Unpublished from public catalog."
+                  buttonVariant="outline"
+                  buttonSize="md"
+                >
+                  <input type="hidden" name="vehicleId" value={vehicle.id} />
+                </ActionForm>
+              ) : (
+                <ActionForm
+                  action={publishVehicleAction}
+                  submitLabel="Publish to Storefront"
+                  successMessage="Published to public catalog!"
+                  buttonVariant="success"
+                  buttonSize="md"
+                >
+                  <input type="hidden" name="vehicleId" value={vehicle.id} />
+                </ActionForm>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {canPrice ? (
-        <fieldset>
-          <legend>Pricing</legend>
-          <ActionForm action={updateVehiclePricingAction} submitLabel="Save pricing">
-            <input type="hidden" name="vehicleId" value={vehicle.id} />
-            <label>
-              Target retail
-              <input
-                name="targetRetail"
-                defaultValue={vehicle.targetRetailPriceCents !== null ? (vehicle.targetRetailPriceCents / 100).toFixed(2) : ""}
-                inputMode="decimal"
-                size={9}
-              />
-            </label>
-            <label>
-              Asking price
-              <input
-                name="askingPrice"
-                defaultValue={vehicle.askingPriceCents !== null ? (vehicle.askingPriceCents / 100).toFixed(2) : ""}
-                inputMode="decimal"
-                size={9}
-              />
-            </label>
-            <label>
-              Minimum approved
-              <input
-                name="minimumApproved"
-                defaultValue={vehicle.minimumApprovedCents !== null ? (vehicle.minimumApprovedCents / 100).toFixed(2) : ""}
-                inputMode="decimal"
-                size={9}
-              />
-            </label>
-          </ActionForm>
-          <div className="row">
-            {vehicle.listingStatus === "ACTIVE" ? (
-              <ActionForm action={unpublishVehicleAction} submitLabel="Unpublish">
-                <input type="hidden" name="vehicleId" value={vehicle.id} />
-              </ActionForm>
-            ) : (
-              <ActionForm action={publishVehicleAction} submitLabel="Publish">
-                <input type="hidden" name="vehicleId" value={vehicle.id} />
-              </ActionForm>
+      {/* Financial Overview Card */}
+      <section className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+            <DollarSign className="w-4 h-4 text-orange-600" />
+            <span>Financial Ledger & Performance Metrics</span>
+          </h2>
+          <span className="text-[11px] font-mono text-slate-500">
+            {canSeeFinance ? "Finance Role Authorized" : "Finance Fields Withheld"}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
+          <MoneyMetric label="Asking Price" valueCents={vehicle.askingPriceCents} accent="orange" size="md" />
+          <MoneyMetric label="Target Retail" valueCents={vehicle.targetRetailPriceCents} size="md" />
+          <MoneyMetric label="Min Approved" valueCents={vehicle.minimumApprovedCents} size="md" />
+          <MoneyMetric label="Landed Cost" valueCents={vehicle.landedCostCents} size="md" />
+          <MoneyMetric label="Est. Gross" valueCents={vehicle.estimatedGrossProfitCents} size="md" />
+          <MoneyMetric label="Actual Gross" valueCents={vehicle.actualGrossProfitCents} size="md" />
+          <MoneyMetric
+            label="ROI %"
+            valueCents={null}
+            roiBasisPoints={vehicle.actualRoiBasisPoints ?? vehicle.estimatedRoiBasisPoints}
+            size="md"
+          />
+        </div>
+      </section>
+
+      {/* Main Command Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left 7 Columns: Gallery, Lifecycle & Details */}
+        <div className="lg:col-span-7 space-y-6">
+          {/* Photo Gallery */}
+          <section className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Camera className="w-4 h-4 text-orange-600" />
+              <span>Vehicle Gallery ({detail.photos.length} Photos)</span>
+            </h2>
+
+            <VehiclePhotoGallery photos={detail.photos} vehicleTitle={title} />
+
+            {/* Photo Upload & Management */}
+            {canWriteInventory && (
+              <div className="pt-4 border-t border-slate-100 space-y-3">
+                <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                  Upload New Photo
+                </span>
+                <ActionForm
+                  action={uploadVehiclePhotoAction}
+                  submitLabel="Upload Photo"
+                  successMessage="Photo uploaded successfully!"
+                  buttonVariant="secondary"
+                  buttonSize="sm"
+                >
+                  <input type="hidden" name="vehicleId" value={vehicle.id} />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input
+                      type="file"
+                      name="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      required
+                      className="text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+                    />
+                    <input
+                      name="alt"
+                      placeholder="Alt description text"
+                      className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-900 placeholder:text-slate-400"
+                    />
+                  </div>
+                </ActionForm>
+
+                {/* Photo List */}
+                {detail.photos.length > 0 && (
+                  <div className="space-y-2 pt-2">
+                    <span className="text-[11px] font-mono text-slate-500 block">Manage Uploaded Photos</span>
+                    <div className="divide-y divide-slate-100 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
+                      {detail.photos.map((photo) => (
+                        <div key={photo.id} className="p-2.5 flex items-center justify-between text-xs gap-3">
+                          <span className="truncate text-slate-700 font-mono max-w-xs">
+                            {photo.alt || photo.url}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {photo.isPrimary ? (
+                              <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-800 font-mono text-[10px] font-bold">
+                                Primary
+                              </span>
+                            ) : (
+                              <ActionForm
+                                action={setPrimaryVehiclePhotoAction}
+                                submitLabel="Make Primary"
+                                buttonVariant="outline"
+                                buttonSize="sm"
+                              >
+                                <input type="hidden" name="photoId" value={photo.id} />
+                              </ActionForm>
+                            )}
+                            <ActionForm
+                              action={deleteVehiclePhotoAction}
+                              submitLabel="Delete"
+                              buttonVariant="danger"
+                              buttonSize="sm"
+                            >
+                              <input type="hidden" name="photoId" value={photo.id} />
+                            </ActionForm>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
-          </div>
-        </fieldset>
-      ) : null}
+          </section>
 
-      {canWriteInventory ? (
-        <fieldset>
-          <legend>Listing details</legend>
-          <ActionForm action={updateVehicleDetailsAction} submitLabel="Save details">
-            <input type="hidden" name="vehicleId" value={vehicle.id} />
-            <label>
-              Mileage
-              <input name="mileage" defaultValue={vehicle.mileage} inputMode="numeric" size={7} />
-            </label>
-            <label>
-              Exterior colour
-              <input name="exteriorColor" defaultValue={vehicle.exteriorColor ?? ""} size={12} />
-            </label>
-            <label>
-              Interior colour
-              <input name="interiorColor" defaultValue={vehicle.interiorColor ?? ""} size={12} />
-            </label>
-            <label>
-              Location
-              <input name="location" defaultValue={vehicle.location ?? ""} size={12} />
-            </label>
-            <label>
-              Description
-              <textarea name="description" defaultValue={vehicle.description ?? ""} rows={3} cols={40} />
-            </label>
-            <label>
-              Internal notes
-              <textarea name="notes" defaultValue={vehicle.notes ?? ""} rows={2} cols={40} />
-            </label>
-          </ActionForm>
-        </fieldset>
-      ) : null}
+          {/* Lifecycle State Transition Box */}
+          {canWriteInventory && (
+            <section className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-orange-600" />
+                <span>Lifecycle Status Control</span>
+              </h2>
 
-      {canWriteInventory ? (
-        <fieldset>
-          <legend>Lifecycle</legend>
-          <ActionForm action={transitionVehicleStatusAction} submitLabel="Move status">
-            <input type="hidden" name="vehicleId" value={vehicle.id} />
-            <label>
-              New status
-              <select name="toStatus" required defaultValue="">
-                <option value="" disabled>
-                  Choose
-                </option>
-                {allowedTransitions(vehicle.status).map((status) => (
-                  <option key={status} value={status}>
-                    {STATUS_LABELS[status]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Note
-              <input name="note" size={24} />
-            </label>
-          </ActionForm>
-          <p className="muted">
-            Only transitions the lifecycle allows are listed. SOLD, DELIVERED and RESERVED are set by their own
-            workflows.
-          </p>
-        </fieldset>
-      ) : null}
+              <ActionForm
+                action={transitionVehicleStatusAction}
+                submitLabel="Transition Lifecycle Status"
+                successMessage="Vehicle status updated."
+                buttonVariant="primary"
+                buttonSize="md"
+              >
+                <input type="hidden" name="vehicleId" value={vehicle.id} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                      Target Status
+                    </label>
+                    <select
+                      name="toStatus"
+                      required
+                      defaultValue=""
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900"
+                    >
+                      <option value="" disabled>
+                        Select Next Status
+                      </option>
+                      {allowedTransitions(vehicle.status).map((s) => (
+                        <option key={s} value={s}>
+                          {STATUS_LABELS[s]} ({s})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-      {canExpense ? (
-        <fieldset>
-          <legend>Expenses</legend>
-          <ActionForm action={recordVehicleExpenseAction} submitLabel="Record expense">
-            <input type="hidden" name="vehicleId" value={vehicle.id} />
-            <label>
-              Category
-              <select name="category" required defaultValue="PARTS">
-                {EXPENSE_CATEGORIES.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Amount
-              <input name="amount" inputMode="decimal" required size={9} />
-            </label>
-            <label>
-              Vendor
-              <input name="vendor" size={14} />
-            </label>
-            <label>
-              Date
-              <input type="date" name="incurredOn" />
-            </label>
-          </ActionForm>
-          {detail.expenses && detail.expenses.length > 0 ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Category</th>
-                  <th>Amount</th>
-                  <th>Vendor</th>
-                  <th>Incurred</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail.expenses.map((expense) => (
-                  <tr key={expense.id}>
-                    <td>{expense.category}</td>
-                    <td>{formatCents(expense.amountCents)}</td>
-                    <td>{expense.vendor ?? "—"}</td>
-                    <td>{expense.incurredOn.toISOString().slice(0, 10)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="muted">No expenses recorded.</p>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                      Status Note
+                    </label>
+                    <input
+                      name="note"
+                      placeholder="e.g. Completed recon inspection"
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400"
+                    />
+                  </div>
+                </div>
+              </ActionForm>
+            </section>
           )}
-        </fieldset>
-      ) : null}
 
-      {canRecon ? (
-        <fieldset>
-          <legend>Reconditioning</legend>
-          <ActionForm action={recordReconItemAction} submitLabel="Add recon item">
-            <input type="hidden" name="vehicleId" value={vehicle.id} />
-            <label>
-              Issue
-              <input name="issue" required size={28} />
-            </label>
-            <label>
-              Estimate
-              <input name="estimate" inputMode="decimal" size={9} />
-            </label>
-            <label>
-              Actual cost
-              <input name="actualCost" inputMode="decimal" size={9} />
-            </label>
-            <label>
-              Status
-              <select name="status" defaultValue="ESTIMATED">
-                <option value="ESTIMATED">ESTIMATED</option>
-                <option value="APPROVED">APPROVED</option>
-                <option value="IN_PROGRESS">IN_PROGRESS</option>
-                <option value="COMPLETED">COMPLETED</option>
-                <option value="CANCELLED">CANCELLED</option>
-              </select>
-            </label>
-          </ActionForm>
-          {detail.reconItems && detail.reconItems.length > 0 ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Issue</th>
-                  <th>Status</th>
-                  <th>Estimate</th>
-                  <th>Actual</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail.reconItems.map((item) => (
-                  <tr key={item.id}>
-                    <td>{item.issue}</td>
-                    <td>{item.status}</td>
-                    <td>{formatCents(item.estimateCents)}</td>
-                    <td>{formatCents(item.actualCostCents)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="muted">No reconditioning items recorded.</p>
+          {/* Listing Details & Specifications Form */}
+          {canWriteInventory && (
+            <section className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-orange-600" />
+                <span>Edit Vehicle Specifications</span>
+              </h2>
+
+              <ActionForm
+                action={updateVehicleDetailsAction}
+                submitLabel="Save Vehicle Details"
+                successMessage="Vehicle specifications updated."
+                buttonVariant="secondary"
+                buttonSize="md"
+              >
+                <input type="hidden" name="vehicleId" value={vehicle.id} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                      Mileage
+                    </label>
+                    <input
+                      name="mileage"
+                      defaultValue={vehicle.mileage}
+                      inputMode="numeric"
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm font-mono text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                      Location
+                    </label>
+                    <input
+                      name="location"
+                      defaultValue={vehicle.location ?? ""}
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                      Exterior Color
+                    </label>
+                    <input
+                      name="exteriorColor"
+                      defaultValue={vehicle.exteriorColor ?? ""}
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                      Interior Color
+                    </label>
+                    <input
+                      name="interiorColor"
+                      defaultValue={vehicle.interiorColor ?? ""}
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2 space-y-1">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                      Public Description
+                    </label>
+                    <textarea
+                      name="description"
+                      defaultValue={vehicle.description ?? ""}
+                      rows={3}
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2 space-y-1">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                      Internal Operator Notes
+                    </label>
+                    <textarea
+                      name="notes"
+                      defaultValue={vehicle.notes ?? ""}
+                      rows={2}
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400"
+                    />
+                  </div>
+                </div>
+              </ActionForm>
+            </section>
           )}
-        </fieldset>
-      ) : null}
+        </div>
 
-      {canWriteInventory ? (
-        <fieldset>
-          <legend>Photos</legend>
-          <ActionForm action={uploadVehiclePhotoAction} submitLabel="Upload photo">
-            <input type="hidden" name="vehicleId" value={vehicle.id} />
-            <label>
-              Image (JPEG, PNG or WebP)
-              <input type="file" name="file" accept="image/jpeg,image/png,image/webp" required />
-            </label>
-            <label>
-              Alt text
-              <input name="alt" size={24} />
-            </label>
-          </ActionForm>
-          {detail.photos.length === 0 ? (
-            <p className="muted">No photos uploaded.</p>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Photo</th>
-                  <th>Primary</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {detail.photos.map((photo) => (
-                  <tr key={photo.id}>
-                    <td>{photo.alt ?? photo.url}</td>
-                    <td>{photo.isPrimary ? "Yes" : "No"}</td>
-                    <td>
-                      <div className="row">
-                        {!photo.isPrimary ? (
-                          <ActionForm action={setPrimaryVehiclePhotoAction} submitLabel="Make primary">
-                            <input type="hidden" name="photoId" value={photo.id} />
-                          </ActionForm>
-                        ) : null}
-                        <ActionForm action={deleteVehiclePhotoAction} submitLabel="Delete">
-                          <input type="hidden" name="photoId" value={photo.id} />
-                        </ActionForm>
+        {/* Right 5 Columns: Pricing, Recon, Expenses & Audit History */}
+        <div className="lg:col-span-5 space-y-6">
+          {/* Pricing Controls Card */}
+          {canPrice && (
+            <section className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Tag className="w-4 h-4 text-orange-600" />
+                <span>Pricing Strategy</span>
+              </h2>
+
+              <ActionForm
+                action={updateVehiclePricingAction}
+                submitLabel="Save Pricing Strategy"
+                successMessage="Vehicle pricing updated."
+                buttonVariant="primary"
+                buttonSize="md"
+              >
+                <input type="hidden" name="vehicleId" value={vehicle.id} />
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                      Asking Price ($)
+                    </label>
+                    <input
+                      name="askingPrice"
+                      defaultValue={
+                        vehicle.askingPriceCents !== null ? (vehicle.askingPriceCents / 100).toFixed(2) : ""
+                      }
+                      inputMode="decimal"
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm font-mono text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                      Target Retail Price ($)
+                    </label>
+                    <input
+                      name="targetRetail"
+                      defaultValue={
+                        vehicle.targetRetailPriceCents !== null
+                          ? (vehicle.targetRetailPriceCents / 100).toFixed(2)
+                          : ""
+                      }
+                      inputMode="decimal"
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm font-mono text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                      Minimum Approved Price ($)
+                    </label>
+                    <input
+                      name="minimumApproved"
+                      defaultValue={
+                        vehicle.minimumApprovedCents !== null
+                          ? (vehicle.minimumApprovedCents / 100).toFixed(2)
+                          : ""
+                      }
+                      inputMode="decimal"
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm font-mono text-slate-900"
+                    />
+                  </div>
+                </div>
+              </ActionForm>
+            </section>
+          )}
+
+          {/* Reconditioning Items */}
+          {canRecon && (
+            <section className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Wrench className="w-4 h-4 text-orange-600" />
+                <span>Reconditioning Tasks</span>
+              </h2>
+
+              <ActionForm
+                action={recordReconItemAction}
+                submitLabel="Add Recon Item"
+                successMessage="Recon item added."
+                buttonVariant="secondary"
+                buttonSize="sm"
+              >
+                <input type="hidden" name="vehicleId" value={vehicle.id} />
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="text-slate-600 font-medium block mb-1">Issue Description</label>
+                    <input
+                      name="issue"
+                      required
+                      placeholder="e.g. Replace front brake pads"
+                      className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-900"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-600 font-medium block mb-1">Est. Cost ($)</label>
+                      <input
+                        name="estimate"
+                        inputMode="decimal"
+                        placeholder="250.00"
+                        className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-mono text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-600 font-medium block mb-1">Actual Cost ($)</label>
+                      <input
+                        name="actualCost"
+                        inputMode="decimal"
+                        placeholder="240.00"
+                        className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-mono text-slate-900"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-slate-600 font-medium block mb-1">Status</label>
+                    <select
+                      name="status"
+                      defaultValue="ESTIMATED"
+                      className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-900"
+                    >
+                      <option value="ESTIMATED">ESTIMATED</option>
+                      <option value="APPROVED">APPROVED</option>
+                      <option value="IN_PROGRESS">IN_PROGRESS</option>
+                      <option value="COMPLETED">COMPLETED</option>
+                      <option value="CANCELLED">CANCELLED</option>
+                    </select>
+                  </div>
+                </div>
+              </ActionForm>
+
+              {/* Recon List */}
+              {detail.reconItems && detail.reconItems.length > 0 ? (
+                <div className="divide-y divide-slate-100 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
+                  {detail.reconItems.map((item) => (
+                    <div key={item.id} className="p-3 text-xs space-y-1">
+                      <div className="flex items-center justify-between font-semibold text-slate-900">
+                        <span>{item.issue}</span>
+                        <StatusBadge status={item.status} size="sm" />
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      <div className="flex items-center gap-3 text-[11px] font-mono text-slate-500">
+                        <span>Est: {formatCents(item.estimateCents)}</span>
+                        <span>•</span>
+                        <span>Actual: {formatCents(item.actualCostCents)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 font-mono text-center">No recon items logged.</p>
+              )}
+            </section>
           )}
-        </fieldset>
-      ) : null}
 
-      <h2>History</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>When</th>
-            <th>From</th>
-            <th>To</th>
-            <th>Note</th>
-          </tr>
-        </thead>
-        <tbody>
-          {detail.statusEvents.map((event) => (
-            <tr key={event.id}>
-              <td>{event.createdAt.toISOString().slice(0, 16).replace("T", " ")}</td>
-              <td>{event.fromStatus ?? "—"}</td>
-              <td>{event.toStatus}</td>
-              <td>{event.note ?? "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </>
+          {/* Expenses Log */}
+          {canExpense && (
+            <section className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-orange-600" />
+                <span>Vehicle Expenses</span>
+              </h2>
+
+              <ActionForm
+                action={recordVehicleExpenseAction}
+                submitLabel="Record Expense"
+                successMessage="Expense logged."
+                buttonVariant="secondary"
+                buttonSize="sm"
+              >
+                <input type="hidden" name="vehicleId" value={vehicle.id} />
+                <div className="space-y-3 text-xs">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-600 font-medium block mb-1">Category</label>
+                      <select
+                        name="category"
+                        required
+                        defaultValue="PARTS"
+                        className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-900"
+                      >
+                        {EXPENSE_CATEGORIES.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-slate-600 font-medium block mb-1">Amount ($)</label>
+                      <input
+                        name="amount"
+                        inputMode="decimal"
+                        required
+                        placeholder="150.00"
+                        className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-mono text-slate-900"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-600 font-medium block mb-1">Vendor</label>
+                      <input
+                        name="vendor"
+                        placeholder="AutoZone"
+                        className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-600 font-medium block mb-1">Incurred Date</label>
+                      <input
+                        type="date"
+                        name="incurredOn"
+                        className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-900"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </ActionForm>
+
+              {/* Expense List */}
+              {detail.expenses && detail.expenses.length > 0 ? (
+                <div className="divide-y divide-slate-100 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
+                  {detail.expenses.map((exp) => (
+                    <div key={exp.id} className="p-2.5 text-xs flex items-center justify-between">
+                      <div>
+                        <span className="font-semibold text-slate-900 block">{exp.category}</span>
+                        <span className="text-[11px] font-mono text-slate-500">
+                          {exp.vendor ?? "N/A"} • {exp.incurredOn.toISOString().slice(0, 10)}
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold text-slate-900">{formatCents(exp.amountCents)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 font-mono text-center">No expenses logged.</p>
+              )}
+            </section>
+          )}
+
+          {/* Audit Trail History */}
+          <section className="p-5 sm:p-6 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <History className="w-4 h-4 text-orange-600" />
+              <span>Status Event History</span>
+            </h2>
+
+            <div className="divide-y divide-slate-100 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden text-xs">
+              {detail.statusEvents.map((evt) => (
+                <div key={evt.id} className="p-3 space-y-1">
+                  <div className="flex items-center justify-between font-mono text-slate-700">
+                    <span>
+                      {evt.fromStatus ? `${evt.fromStatus} → ` : ""}
+                      <strong className="text-orange-700">{evt.toStatus}</strong>
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      {evt.createdAt.toISOString().slice(0, 16).replace("T", " ")}
+                    </span>
+                  </div>
+                  {evt.note && <p className="text-slate-600 text-[11px]">{evt.note}</p>}
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
   );
 }

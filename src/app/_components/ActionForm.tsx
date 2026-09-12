@@ -2,23 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
-
-/**
- * The one client component in the Phase 6 shell.
- *
- * WHY IT EXISTS
- * A server-rendered `<form action={serverAction}>` works without JavaScript,
- * but its return value is discarded, so an operator would see a failed mutation
- * as "the page did not change". This wrapper keeps the canonical action
- * signature — `(FormData) => Promise<ActionResult>` — and adds the two things a
- * form needs: a pending state and the action's own error message.
- *
- * It is presentation scaffolding. The final UI is expected to replace it with
- * its own form primitives; the ACTIONS it calls are the stable contract.
- *
- * The outcome is typed structurally on purpose: the client only needs to know
- * whether the call succeeded and, if not, what to show.
- */
+import { Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 
 export interface FormActionOutcome {
   ok: boolean;
@@ -30,41 +14,108 @@ export type FormAction = (formData: FormData) => Promise<FormActionOutcome>;
 
 interface ActionFormProps {
   action: FormAction;
-  children: ReactNode;
+  children?: ReactNode;
   submitLabel: string;
   successMessage?: string;
+  className?: string;
+  buttonVariant?: "primary" | "secondary" | "danger" | "success" | "outline" | "neutral";
+  buttonClassName?: string;
+  buttonSize?: "sm" | "md" | "lg";
 }
 
-export function ActionForm({ action, children, submitLabel, successMessage = "Saved." }: ActionFormProps) {
+export function ActionForm({
+  action,
+  children,
+  submitLabel,
+  successMessage = "Saved successfully.",
+  className = "",
+  buttonVariant = "primary",
+  buttonClassName = "",
+  buttonSize = "md",
+}: ActionFormProps) {
   const router = useRouter();
   const [outcome, setOutcome] = useState<FormActionOutcome | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const variantStyles = {
+    primary:
+      "bg-orange-600 hover:bg-orange-700 text-white font-semibold shadow-xs active:bg-orange-800 focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2",
+    secondary:
+      "bg-slate-900 hover:bg-slate-800 text-white font-medium active:bg-slate-950 focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2",
+    danger:
+      "bg-rose-600 hover:bg-rose-700 text-white font-medium active:bg-rose-800 focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2",
+    success:
+      "bg-emerald-600 hover:bg-emerald-700 text-white font-medium active:bg-emerald-800 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2",
+    outline:
+      "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 font-medium focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2",
+    neutral:
+      "border border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200 font-medium focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2",
+  };
+
+  const sizeStyles = {
+    sm: "px-3 py-1.5 text-xs rounded-lg",
+    md: "px-4 py-2 text-sm rounded-lg",
+    lg: "px-5 py-2.5 text-base rounded-xl font-semibold",
+  };
+
   return (
     <form
+      className={`space-y-4 ${className}`}
       action={(formData: FormData) => {
+        setOutcome(null);
         startTransition(async () => {
           const result = await action(formData);
           setOutcome(result);
-          // Re-fetch the server components so the page reflects the new state.
-          if (result.ok) router.refresh();
+          if (result.ok) {
+            router.refresh();
+          }
         });
       }}
     >
       {children}
-      <button type="submit" disabled={pending}>
-        {pending ? "Working…" : submitLabel}
-      </button>
+
+      <div className="pt-1">
+        <button
+          type="submit"
+          disabled={pending}
+          className={`inline-flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${variantStyles[buttonVariant]} ${sizeStyles[buttonSize]} ${buttonClassName}`}
+        >
+          {pending ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Processing...</span>
+            </>
+          ) : (
+            <span>{submitLabel}</span>
+          )}
+        </button>
+      </div>
+
       {outcome && !outcome.ok ? (
-        <p className="banner banner-error" role="alert">
-          {outcome.error}
-          {outcome.code ? <span className="muted"> ({outcome.code})</span> : null}
-        </p>
+        <div
+          role="alert"
+          className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2"
+        >
+          <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="font-medium">{outcome.error || "Operation failed."}</p>
+            {outcome.code ? (
+              <p className="text-[11px] text-rose-600 font-mono">
+                Code: {outcome.code}
+              </p>
+            ) : null}
+          </div>
+        </div>
       ) : null}
+
       {outcome?.ok ? (
-        <p className="banner banner-ok" role="status">
-          {successMessage}
-        </p>
+        <div
+          role="status"
+          className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2"
+        >
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <p className="font-medium">{successMessage}</p>
+        </div>
       ) : null}
     </form>
   );

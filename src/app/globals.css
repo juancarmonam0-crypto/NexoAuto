@@ -1,150 +1,61 @@
 @import "tailwindcss";
 
-/*
- * Phase 6 shell styles — deliberately minimal.
- *
- * These rules exist only so unstyled server-rendered HTML is readable and
- * accessible while the real interface is built. The final visual treatment
- * (layout, typography, components, branding) belongs to the UI implementation
- * and should replace this file, not extend it.
- */
+@layer base {
+  :root {
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
 
-:root {
-  color-scheme: light;
+  body {
+    font-family: var(--font-sans);
+    background-color: #f8fafc;
+    color: #0f172a;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
 
-body {
-  margin: 0;
-  color: #18181b;
-  background: #ffffff;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  line-height: 1.5;
+/* Light theme card and surface utilities */
+.surface-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
 }
 
-main {
-  max-width: 64rem;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 4rem;
+.surface-subtle {
+  background-color: #f1f5f9;
+  border: 1px solid #e2e8f0;
 }
 
-h1 {
-  font-size: 1.4rem;
-  margin: 0 0 1rem;
-}
-
-h2 {
-  font-size: 1.1rem;
-  margin: 2rem 0 0.5rem;
-}
-
-a {
-  color: #1d4ed8;
-}
-
-table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 0.9rem;
-}
-
-th,
-td {
-  text-align: left;
-  padding: 0.4rem 0.5rem;
-  border-bottom: 1px solid #e4e4e7;
-  vertical-align: top;
-}
-
-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #e4e4e7;
-}
-
-nav a {
-  text-decoration: none;
-}
-
-nav a[aria-current="page"] {
-  font-weight: 600;
-}
-
-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  align-items: flex-end;
-  margin: 0.6rem 0;
-}
-
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  font-size: 0.8rem;
-  color: #3f3f46;
-}
-
-input,
+/* Form input base styling for light theme */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="number"],
+input[type="date"],
 select,
-textarea,
-button {
-  font: inherit;
-  padding: 0.35rem 0.5rem;
+textarea {
+  font-family: inherit;
+  color: #0f172a;
+  background-color: #ffffff;
 }
 
-button {
-  cursor: pointer;
+/* Crisp scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-fieldset {
-  border: 1px solid #e4e4e7;
-  border-radius: 0.25rem;
-  margin: 0 0 1rem;
-  padding: 0.75rem;
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
 }
 
-legend {
-  font-size: 0.8rem;
-  color: #3f3f46;
-  padding: 0 0.25rem;
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
 }
 
-.banner {
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.25rem;
-  margin: 0.75rem 0;
-  font-size: 0.9rem;
-}
-
-.banner-ok {
-  background: #dcfce7;
-  color: #14532d;
-}
-
-.banner-error {
-  background: #fee2e2;
-  color: #7f1d1d;
-}
-
-.muted {
-  color: #52525b;
-  font-size: 0.85rem;
-}
-
-.row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: center;
-}
-
-.card {
-  border: 1px solid #e4e4e7;
-  border-radius: 0.25rem;
-  padding: 0.75rem;
-  margin: 0.75rem 0;
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
