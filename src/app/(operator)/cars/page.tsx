@@ -2,14 +2,43 @@ import Link from "next/link";
 import { ActionForm } from "@/app/_components/ActionForm";
 import { publishVehicleAction, unpublishVehicleAction } from "@/app/actions/cars";
 import { hasCapability } from "@/lib/auth/roles";
-import { formatCents } from "@/lib/money";
 import { listInventory } from "@/lib/operations/inventory";
 import { pageOperationContext } from "@/lib/operations/runtime";
 import { StatusBadge } from "@/app/_components/StatusBadge";
 import { MoneyMetric } from "@/app/_components/MoneyMetric";
-import { Car, Plus, ChevronRight, Clock, DollarSign, ArrowRight, Eye, EyeOff, ShoppingBag } from "lucide-react";
+import { Car, Plus, ArrowRight, ShoppingBag } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * CARS — the fleet.
+ *
+ * One card per vehicle: what it is, what it owes, how long it has been sitting
+ * and whether it is on the storefront. Everything here comes from
+ * `listInventory`; the page derives no figure of its own.
+ *
+ * PHASE 9B GAP: `listInventory` returns no photo, so a thumbnail would need a
+ * read operation that returns the primary photo per vehicle. None exists, so
+ * no image is faked here.
+ */
+
+/** Days in inventory is a count, not money — it needs its own treatment. */
+function DaysMetric({ days }: { days: number | null }) {
+  return (
+    <div className="flex flex-col space-y-0.5">
+      <span className="font-mono text-[11px] font-medium uppercase tracking-wider text-slate-500">
+        Days in inventory
+      </span>
+      <span
+        className={`font-mono text-sm tracking-tight ${
+          days !== null && days > 60 ? "font-bold text-amber-700" : "text-slate-900"
+        }`}
+      >
+        {days ?? "—"}
+      </span>
+    </div>
+  );
+}
 
 export default async function CarsPage() {
   const ctx = await pageOperationContext("inventory:read");
@@ -115,41 +144,54 @@ export default async function CarsPage() {
                       </div>
                     </div>
 
-                    {/* Specs & Mileage */}
-                    <div className="grid grid-cols-2 gap-2 text-xs font-mono text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                      <div>
-                        <span className="text-slate-400 block text-[10px] uppercase">Mileage:</span>
-                        <span className="font-semibold text-slate-800">
+                    {/* Specs & money. Cost and profit are withheld for roles without finance:read. */}
+                    <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-100 bg-slate-50 p-2.5">
+                      <div className="flex flex-col space-y-0.5">
+                        <span className="font-mono text-[11px] font-medium uppercase tracking-wider text-slate-500">
+                          Mileage
+                        </span>
+                        <span className="font-mono text-sm tracking-tight text-slate-900">
                           {v.mileage.toLocaleString("en-US")} mi
                         </span>
                       </div>
-                      <div>
-                        <span className="text-slate-400 block text-[10px] uppercase">Asking Price:</span>
-                        <span className="font-bold text-slate-900">
-                          {v.askingPriceCents ? formatCents(v.askingPriceCents) : "—"}
-                        </span>
-                      </div>
+                      <MoneyMetric
+                        label="Asking"
+                        valueCents={v.askingPriceCents}
+                        accent="orange"
+                        size="sm"
+                        masked={false}
+                      />
+                      <MoneyMetric
+                        label="Landed cost"
+                        valueCents={v.landedCostCents}
+                        size="sm"
+                        masked={!canSeeFinance}
+                      />
+                      <MoneyMetric
+                        label="Est. gross"
+                        valueCents={v.estimatedGrossProfitCents}
+                        accent="green"
+                        size="sm"
+                        masked={!canSeeFinance}
+                      />
+                      <DaysMetric days={v.daysInInventory} />
+                      {v.acquisitionSource ? (
+                        <div className="flex flex-col space-y-0.5">
+                          <span className="font-mono text-[11px] font-medium uppercase tracking-wider text-slate-500">
+                            Acquired
+                          </span>
+                          <span className="truncate font-mono text-sm tracking-tight text-slate-900">
+                            {v.acquisitionSource.replace(/_/g, " ")}
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
 
-                    {/* Economics Matrix (Masked for Sales) */}
-                    <div className="grid grid-cols-2 gap-2 text-xs font-mono p-2.5 rounded-lg bg-slate-50/50 border border-slate-100">
-                      <div>
-                        <span className="text-slate-400 block text-[10px] uppercase">Landed Cost:</span>
-                        <span className="font-medium text-slate-700">
-                          {canSeeFinance ? (v.landedCostCents ? formatCents(v.landedCostCents) : "—") : "—"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block text-[10px] uppercase">Est. Gross:</span>
-                        <span className="font-bold text-emerald-700">
-                          {canSeeFinance
-                            ? v.estimatedGrossProfitCents
-                              ? formatCents(v.estimatedGrossProfitCents)
-                              : "—"
-                            : "—"}
-                        </span>
-                      </div>
-                    </div>
+                    {!canSeeFinance ? (
+                      <p className="text-[11px] text-slate-500">
+                        Cost and profit are shown to owners and managers only.
+                      </p>
+                    ) : null}
                   </div>
 
                   {/* Actions Bar */}

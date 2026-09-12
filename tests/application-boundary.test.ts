@@ -71,6 +71,7 @@ import { createSourcingCandidateAction, evaluateOpportunityAction } from "@/app/
 import { publishVehicleAction } from "@/app/actions/cars";
 import { createLeadAction, updateLeadStatusAction } from "@/app/actions/leads";
 import { completeVehicleSaleAction } from "@/app/actions/sales";
+import type { SaleResult } from "@/lib/operations";
 import { AuthorizationError } from "@/lib/auth/errors";
 import { ConflictError } from "@/lib/domain-errors";
 import { InvalidLeadTransitionError } from "@/lib/lead-status";
@@ -391,6 +392,9 @@ describe("LEADS — delegation and state-machine errors", () => {
 describe("SALES — completion delegates and dates cross as strings", () => {
   it("returns the operation's economics with an ISO date", async () => {
     signedInAs("MANAGER");
+    // Annotated with `satisfies` so this fixture cannot silently fall behind
+    // `SaleResult` the way it did when Phase 9B widened it: every new field
+    // must be added here, or this stops compiling.
     ops.completeVehicleSale.mockResolvedValue({
       dealId: "deal_1",
       vehicleId: "veh_1",
@@ -403,7 +407,29 @@ describe("SALES — completion delegates and dates cross as strings", () => {
       landedCostCents: 1_731_500,
       actualGrossProfitCents: 218_500,
       actualRoiBasisPoints: 1_262,
-    });
+      landedCost: null,
+      financeType: "FINANCE",
+      paymentFrequency: "MONTHLY",
+      numberOfPayments: 60,
+      paymentAmountCents: 41_000,
+      finalPaymentCents: 41_000,
+      firstPaymentDateIso: "2026-04-06T00:00:00.000Z",
+      amountFinancedCents: 2_000_000,
+      downPaymentCents: 200_000,
+      salesTaxCents: 0,
+      financeChargeCents: 460_000,
+      totalOfPaymentsCents: 2_460_000,
+      aprBasisPoints: 899,
+      termMonths: 60,
+      vehicleGrossCents: 218_500,
+      dealerCapitalStillExposedCents: 0,
+      projectedFinanceIncomeCents: 460_000,
+      combinedExpectedEconomicsCents: 678_500,
+      ratePolicyId: null,
+      ratePolicyCeilingBasisPoints: null,
+      ratePolicyStatement: null,
+      riskFlags: [],
+    } satisfies SaleResult);
 
     const result = await completeVehicleSaleAction(saleForm());
 
@@ -412,6 +438,10 @@ describe("SALES — completion delegates and dates cross as strings", () => {
       expect(result.data.saleDateIso).toBe("2026-03-06T00:00:00.000Z");
       expect(result.data).not.toHaveProperty("saleDate");
       expect(result.data.actualGrossProfitCents).toBe(218_500);
+      expect(result.data.financeChargeCents).toBe(460_000);
+      expect(result.data.totalOfPaymentsCents).toBe(
+        result.data.amountFinancedCents! + result.data.financeChargeCents!,
+      );
       expectSerializable(result.data);
       expect(JSON.parse(JSON.stringify(result.data))).toEqual(result.data);
     }

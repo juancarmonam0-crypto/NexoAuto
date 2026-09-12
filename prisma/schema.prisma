@@ -141,6 +141,19 @@ enum FinanceType {
   LEASE
   BUY_HERE_PAY_HERE
   UNDECIDED
+  /// Phase 9B. A lease whose contract transfers ownership at the end is a
+  /// different product from a lease: the customer's total outlay, the dealer's
+  /// residual exposure and the deal mix all differ, so it gets its own value
+  /// rather than being recorded as a LEASE and lost in reporting.
+  LEASE_TO_OWN
+}
+
+/// How often a structured deal is paid. Bi-weekly is 26 periods a year, not 24.
+enum PaymentFrequency {
+  MONTHLY
+  SEMIMONTHLY
+  BIWEEKLY
+  WEEKLY
 }
 
 /// Texas / webDEALER boundary. We record staff-reported progress only.
@@ -621,6 +634,47 @@ model Deal {
 
   tradeInVehicleId     String?
   tradeInAllowanceCents Int?
+  /// Lien payoff the dealership sends to the trade-in's lender. Part of the
+  /// deal's cash math, and the difference against the allowance is the
+  /// customer's equity (which may be negative).
+  tradeInPayoffCents    Int?
+
+  // ---- Phase 9B: structured deal terms -------------------------------------
+  // Everything below is produced by src/lib/deal-structuring.ts and persisted
+  // so a contracted deal can be reproduced exactly, years later, without
+  // re-running an engine whose defaults may have changed. Nothing here is
+  // computed in the frontend, and the finance charge is NEVER folded into the
+  // vehicle sale price.
+  paymentFrequency     PaymentFrequency @default(MONTHLY)
+  paymentAmountCents   Int?
+  /// The last scheduled payment, which clears the balance exactly.
+  finalPaymentCents    Int?
+  numberOfPayments     Int?
+  firstPaymentDate     DateTime?
+  salesTaxCents        Int?
+  financeChargeCents   Int?
+  totalOfPaymentsCents Int?
+  /// What the customer still owes as of the last update: unpaid principal for
+  /// an instalment contract, unpaid scheduled payments for a lease, and 0 when
+  /// the dealership holds no receivable. Nothing collects payments in this
+  /// phase; a later servicing phase maintains this figure.
+  remainingBalanceCents Int?
+
+  // Lease and lease-to-own structure.
+  capitalizedCostCents      Int?
+  capCostReductionCents     Int?
+  residualValueCents        Int?
+  /// APR-equivalent of the lease money factor (money factor x 2400), so lease
+  /// rates stay in integer basis points like every other rate.
+  moneyFactorAprBasisPoints Int?
+  purchaseOptionCents       Int?
+
+  // Configured rate-policy snapshot: a record of what was CHECKED, with the
+  // ceiling and the policy id, so the check can be audited later. It is
+  // explicitly NOT a claim that the contract is legally compliant.
+  ratePolicyId                 String?
+  ratePolicyCeilingBasisPoints Int?
+  ratePolicyEvaluatedAt        DateTime?
 
   saleDate     DateTime?
   deliveryDate DateTime?

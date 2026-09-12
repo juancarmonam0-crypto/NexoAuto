@@ -40,3 +40,25 @@ export function rethrowUniqueViolation(
   }
   throw error;
 }
+
+/**
+ * True when the database is missing a column, table or type that the deployed
+ * CODE expects — i.e. a migration has not been applied yet.
+ *
+ * WHY THIS EXISTS (Phase 9D)
+ * Code and schema are deployed separately. The Phase 9 code was pushed BEFORE
+ * migration `0006_deal_structuring_and_finance` is applied to production, so for
+ * a window a route can legitimately ask for a column the database does not have
+ * yet. That must degrade into an honest message on that one page, not a 500 and
+ * certainly not a write.
+ *
+ * It deliberately matches ONLY "the schema is behind the code":
+ *   P2022 / 42703 — column does not exist
+ *   P2021 / 42P01 — table does not exist
+ * Anything else (a constraint violation, a unique conflict, a connection
+ * failure) is NOT this condition and is re-thrown untouched by the caller.
+ */
+export function isMissingSchemaError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null | undefined)?.code;
+  return code === "P2022" || code === "P2021" || code === "42703" || code === "42P01";
+}

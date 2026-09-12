@@ -47,6 +47,22 @@ const HIDDEN_FINANCIAL_KEYS = [
   "expectedRoiBasisPoints",
   "frontEndMarginCents",
   "negotiatingRoomCents",
+  // ---- Phase 9B: deal-structuring economics -------------------------------
+  // The price ladder's cost-derived tiers. The ASKING price stays visible (it
+  // is the customer-facing sticker); the floors and every gross/return figure
+  // do not, because each one discloses the dealership's cost basis.
+  "minimumApprovedGrossCents",
+  "minimumApprovedRoiBasisPoints",
+  "targetGrossCents",
+  "targetRoiBasisPoints",
+  "askingGrossCents",
+  "askingRoiBasisPoints",
+  // Deal-structure economics
+  "vehicleGrossCents",
+  "combinedExpectedEconomicsCents",
+  // The structure score is a weighted function of the margin, so publishing it
+  // would reconstruct what the margin fields withhold.
+  "score",
 ] as const;
 
 /**

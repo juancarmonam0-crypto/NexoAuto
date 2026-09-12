@@ -2,13 +2,24 @@ import Link from "next/link";
 import { ActionForm } from "@/app/_components/ActionForm";
 import { cancelDealAction, completeVehicleSaleAction } from "@/app/actions/sales";
 import { hasCapability } from "@/lib/auth/roles";
-import { formatCents } from "@/lib/money";
-import { FINANCE_TYPES, liveDealForVehicle } from "@/lib/operations/sales";
+import { formatBasisPoints, formatCents } from "@/lib/money";
+import { FINANCE_TYPES, getLiveDealForVehicle, type DealTermsView } from "@/lib/operations/sales";
+import { isMissingSchemaError } from "@/lib/operations";
 import { listInventory } from "@/lib/operations/inventory";
+import { CONTACT_METHODS, listLeads } from "@/lib/operations/leads";
+import { leadStatusLabel } from "@/lib/lead-status";
 import { pageOperationContext } from "@/lib/operations/runtime";
 import { StatusBadge } from "@/app/_components/StatusBadge";
 import { MoneyMetric } from "@/app/_components/MoneyMetric";
-import { TrendingUp, Plus, CheckCircle2, ArrowRight, Car, BadgeCheck } from "lucide-react";
+import { TrendingUp, Plus, CheckCircle2, ArrowRight, Car, BadgeCheck, Calculator } from "lucide-react";
+
+/** Payment period suffix, for a compact structure line. Presentation only. */
+const PERIOD_SUFFIX: Record<string, string> = {
+  MONTHLY: "mo",
+  SEMIMONTHLY: "semi-mo",
+  BIWEEKLY: "bi-wk",
+  WEEKLY: "wk",
+};
 
 /**
  * SALES — deals and closings.
@@ -45,6 +56,10 @@ export default async function SalesPage() {
 
   const { items: vehicles } = await listInventory(ctx, { limit: 100 });
 
+  // Open leads are offered as sale attribution: the operation validates the
+  // lead exists and links it to the deal it creates.
+  const { items: openLeads } = await listLeads(ctx, { limit: 200, openOnly: true });
+
   // A vehicle carries its own outcome: `isSold` is true once a final sale price
   // is recorded, and `cancelDeal` clears it when a sale is unwound.
   const completed = vehicles.filter((vehicle) => vehicle.isSold);
@@ -52,15 +67,28 @@ export default async function SalesPage() {
     (vehicle) => !vehicle.isSold && vehicle.status !== "WHOLESALE" && vehicle.status !== "REJECTED",
   );
 
-  // One contract read per vehicle. `liveDealForVehicle` returns the deal id and
-  // status only — never buyer details.
-  const dealByVehicle = new Map(
-    await Promise.all(
-      [...completed, ...onTheLot].map(
-        async (vehicle) => [vehicle.id, await liveDealForVehicle(ctx, vehicle.id)] as const,
+  // CODE AND SCHEMA DEPLOY SEPARATELY (Phase 9D). The Phase 9 code can reach
+  // production BEFORE migration 0006 is applied there, in which case this read
+  // fails on a column the database does not have yet. That must degrade into an
+  // honest notice on this page rather than a 500 — and it must never write
+  // anything. Any other error is re-thrown untouched.
+  let dealTermsAvailable = true;
+  let dealByVehicle = new Map<string, DealTermsView | null>();
+  try {
+    // One contract read per vehicle. Phase 9B widened it: it now returns the
+    // recorded payment structure (rate, term, payment, finance charge) as well
+    // as the id and status, so a completed sale shows the terms it was written on.
+    dealByVehicle = new Map(
+      await Promise.all(
+        [...completed, ...onTheLot].map(
+          async (vehicle) => [vehicle.id, await getLiveDealForVehicle(ctx, vehicle.id)] as const,
+        ),
       ),
-    ),
-  );
+    );
+  } catch (error) {
+    if (!isMissingSchemaError(error)) throw error;
+    dealTermsAvailable = false;
+  }
 
   return (
     <div className="space-y-6">
@@ -78,6 +106,13 @@ export default async function SalesPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+          <Link
+            href="/sales/desk"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-3 py-1.5 font-semibold text-white shadow-xs transition-colors hover:bg-orange-700"
+          >
+            <Calculator className="h-3.5 w-3.5" />
+            <span>Deal Desk</span>
+          </Link>
           <span className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-slate-700 shadow-xs">
             On the lot: <span className="font-bold text-slate-900">{onTheLot.length}</span>
           </span>
@@ -158,6 +193,28 @@ export default async function SalesPage() {
                       <DaysMetric days={vehicle.daysInInventory} />
                     </div>
 
+                    {/* Phase 9B: the terms the contract was actually written on.
+                        These are the buyer's disclosed figures (rate, term,
+                        payment, finance charge), not dealership cost. */}
+                    {deal && deal.paymentAmountCents !== null ? (
+                      <p className="font-mono text-[11px] leading-relaxed text-slate-600">
+                        {deal.financeType.replace(/_/g, " ")}
+                        {deal.financeType !== "CASH" && deal.aprBasisPoints !== null
+                          ? ` · ${formatBasisPoints(deal.aprBasisPoints, 2)} APR`
+                          : ""}
+                        {deal.termMonths ? ` · ${deal.termMonths} months` : ""}
+                        {deal.numberOfPayments
+                          ? ` · ${deal.numberOfPayments} payments`
+                          : ""}
+                        {deal.paymentAmountCents
+                          ? ` · ${formatCents(deal.paymentAmountCents)}/${PERIOD_SUFFIX[deal.paymentFrequency] ?? "period"}`
+                          : ""}
+                        {deal.financeChargeCents
+                          ? ` · finance charge ${formatCents(deal.financeChargeCents)}`
+                          : ""}
+                      </p>
+                    ) : null}
+
                     {!canSeeFinance ? (
                       <p className="text-[11px] text-slate-500">
                         Cost and profit are shown to owners and managers only.
@@ -182,7 +239,7 @@ export default async function SalesPage() {
                         buttonVariant="danger"
                         buttonSize="sm"
                       >
-                        <input type="hidden" name="dealId" value={deal.id} />
+                        <input type="hidden" name="dealId" value={deal.dealId} />
                       </ActionForm>
                     ) : null}
                   </div>
@@ -194,6 +251,18 @@ export default async function SalesPage() {
       </section>
 
       {/* Contract & complete a sale */}
+      {!dealTermsAvailable ? (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900 shadow-xs">
+          <p className="font-semibold">Recorded deal terms are unavailable on this deployment.</p>
+          <p className="mt-1">
+            This database has not received the deal-structuring migration
+            (<span className="font-mono">0006_deal_structuring_and_finance</span>) yet, so the stored payment
+            terms, rate and finance charge cannot be read. Nothing was changed and no figure is being guessed.
+            Sales can still be recorded; the terms will appear once the migration is applied.
+          </p>
+        </section>
+      ) : null}
+
       {canWrite ? (
         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -364,6 +433,84 @@ export default async function SalesPage() {
                   ))}
                 </select>
               </div>
+
+              <div className="space-y-1">
+                <label
+                  htmlFor="sale-preferred-contact"
+                  className="block text-xs font-semibold uppercase tracking-wider text-slate-700"
+                >
+                  Preferred contact
+                </label>
+                <select
+                  id="sale-preferred-contact"
+                  name="preferredContact"
+                  defaultValue="ANY"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                >
+                  {CONTACT_METHODS.map((method) => (
+                    <option key={method} value={method}>
+                      {method}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label
+                  htmlFor="sale-date"
+                  className="block text-xs font-semibold uppercase tracking-wider text-slate-700"
+                >
+                  Sale date
+                </label>
+                <input
+                  id="sale-date"
+                  name="saleDate"
+                  type="date"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                />
+                <p className="text-[11px] text-slate-500">Leave blank to use today.</p>
+              </div>
+
+              <div className="space-y-1 sm:col-span-2">
+                <label
+                  htmlFor="sale-lead"
+                  className="block text-xs font-semibold uppercase tracking-wider text-slate-700"
+                >
+                  Attribute to a lead
+                </label>
+                <select
+                  id="sale-lead"
+                  name="leadId"
+                  defaultValue=""
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                >
+                  <option value="">Not linked to a lead</option>
+                  {openLeads.map((lead) => (
+                    <option key={lead.id} value={lead.id}>
+                      {lead.customer.firstName} {lead.customer.lastName ?? ""} — {leadStatusLabel(lead.status)}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-500">
+                  Linking the deal keeps the inquiry and the sale on the same record.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label
+                htmlFor="sale-notes"
+                className="block text-xs font-semibold uppercase tracking-wider text-slate-700"
+              >
+                Deal notes
+              </label>
+              <textarea
+                id="sale-notes"
+                name="notes"
+                rows={2}
+                placeholder="Trade-in accepted, lender approved, delivery arranged…"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
             </div>
             <p className="text-[11px] text-slate-500">
               Buyer name, phone or email must be supplied — a customer record is created for the sale and the
@@ -449,7 +596,7 @@ export default async function SalesPage() {
                         buttonVariant="outline"
                         buttonSize="sm"
                       >
-                        <input type="hidden" name="dealId" value={deal.id} />
+                        <input type="hidden" name="dealId" value={deal.dealId} />
                       </ActionForm>
                     ) : null}
                   </div>

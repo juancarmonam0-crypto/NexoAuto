@@ -59,18 +59,20 @@ describe.skipIf(!databaseConfigured)("database schema (real PostgreSQL)", () => 
     expect(legacy[0]?.present).toBe(false);
   });
 
-  it("has 25 enum types with 172 labels", async () => {
+  // Phase 9B added one enum type (PaymentFrequency, 4 labels) and one enum
+  // VALUE (FinanceType.LEASE_TO_OWN): 25 types/172 labels -> 26/177.
+  it("has 26 enum types with 177 labels", async () => {
     const types = await prisma.$queryRawUnsafe<Array<{ n: bigint }>>(
       `SELECT count(*) AS n FROM pg_type t JOIN pg_namespace ns ON ns.oid=t.typnamespace
        WHERE t.typtype='e' AND ns.nspname='public'`,
     );
-    expect(Number(types[0]?.n)).toBe(25);
+    expect(Number(types[0]?.n)).toBe(26);
 
     const labels = await prisma.$queryRawUnsafe<Array<{ n: bigint }>>(
       `SELECT count(*) AS n FROM pg_enum e JOIN pg_type t ON t.oid=e.enumtypid
        JOIN pg_namespace ns ON ns.oid=t.typnamespace WHERE ns.nspname='public'`,
     );
-    expect(Number(labels[0]?.n)).toBe(172);
+    expect(Number(labels[0]?.n)).toBe(177);
   });
 
   it("has primary keys on every table and 36 foreign keys", async () => {
@@ -87,7 +89,7 @@ describe.skipIf(!databaseConfigured)("database schema (real PostgreSQL)", () => 
     expect(Number(fk[0]?.n)).toBe(36);
   });
 
-  it("has every integrity CHECK constraint from migration 0002", async () => {
+  it("has every integrity CHECK constraint from migrations 0002 and 0006", async () => {
     const rows = await prisma.$queryRawUnsafe<Array<{ conname: string }>>(
       `SELECT conname FROM pg_constraint c JOIN pg_namespace ns ON ns.oid=c.connamespace
        WHERE ns.nspname='public' AND c.contype='c' ORDER BY conname`,
@@ -98,8 +100,16 @@ describe.skipIf(!databaseConfigured)("database schema (real PostgreSQL)", () => 
       "deal_documents_size_sane",
       "deals_apr_sane",
       "deals_contracted_requires_sale_price",
+      // Phase 9B (migration 0006): the deal-structuring invariants.
+      "deals_lease_structure_sane",
       "deals_money_non_negative",
+      "deals_payment_amount_requires_schedule",
+      "deals_payment_schedule_sane",
+      "deals_payments_arithmetic",
+      "deals_rate_policy_snapshot_paired",
+      "deals_structured_money_non_negative",
       "deals_term_sane",
+      "deals_total_of_payments_covers_principal",
       "expenses_amount_positive",
       "leads_lost_has_reason",
       "recon_completed_has_date",
@@ -196,6 +206,8 @@ describe.skipIf(!databaseConfigured)("database schema (real PostgreSQL)", () => 
       "0003_rls_and_public_surface",
       "0004_public_views_read_only",
       "0005_lock_prisma_migration_history",
+      // Phase 9B: deal structuring, payment modes and the finance engine.
+      "0006_deal_structuring_and_finance",
     ]);
   });
 });

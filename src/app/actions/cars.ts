@@ -19,8 +19,10 @@ import {
   suppliedOnly,
 } from "@/lib/forms";
 import {
+  ACQUISITION_SOURCES,
   EXPENSE_CATEGORIES,
   RECON_STATUSES,
+  TITLE_STATUSES,
   deleteVehiclePhoto,
   publishVehicle,
   recordReconItem,
@@ -84,6 +86,16 @@ export async function updateVehicleDetailsAction(
       location: optionalFormString(formData, "location"),
       notes: optionalFormString(formData, "notes"),
       description: optionalFormString(formData, "description"),
+      // Title status and the equipment list are accepted by the operation
+      // (`vehicleDetailsSchema`) and shown publicly, but were never forwarded
+      // from the boundary — parsing only, no business rule added here.
+      titleStatus: optionalFormString(formData, "titleStatus")
+        ? enumField(formData, "titleStatus", TITLE_STATUSES, undefined, "Title status")
+        : undefined,
+      features: optionalFormString(formData, "features")
+        ?.split(",")
+        .map((feature) => feature.trim())
+        .filter((feature) => feature !== ""),
     });
     if (Object.keys(patch).length === 0) throw new ActionError("Nothing to update.");
     return vehicleMutationContract(await updateVehicleDetails(ctx, vehicleId, patch));
@@ -115,6 +127,9 @@ export async function updateVehicleAcquisitionAction(
     const ctx = await operationContext("pricing:write");
     const vehicleId = requireFormString(formData, "vehicleId", "Vehicle");
     const patch = suppliedOnly({
+      acquisitionSource: optionalFormString(formData, "acquisitionSource")
+        ? enumField(formData, "acquisitionSource", ACQUISITION_SOURCES, undefined, "Acquisition source")
+        : undefined,
       acquisitionDate: optionalFormDate(formData, "acquisitionDate", "Acquisition date"),
       acquisitionPriceCents: optionalFormCents(formData, "acquisitionPrice", "Acquisition price"),
       auctionFeesCents: optionalFormCents(formData, "auctionFees", "Auction fees"),

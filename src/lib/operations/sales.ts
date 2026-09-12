@@ -1,12 +1,20 @@
 import { z } from "zod";
 import type { BasisPoints, Cents } from "@/lib/money";
-import type { DealStatus, FinanceType, Prisma } from "@/generated/prisma";
+import type { DealStatus, FinanceType, PaymentFrequency as PrismaPaymentFrequency, Prisma } from "@/generated/prisma";
 import { ActionError } from "@/lib/action-result";
 import { maskVehicleFinancials } from "@/lib/auth/masking";
+import {
+  type DealPaymentMode,
+  type DealStructure,
+  type DealFinanceType,
+  structureDeal,
+} from "@/lib/deal-structuring";
 import { ConflictError, NotFoundError } from "@/lib/domain-errors";
 import type { LandedCostBreakdown } from "@/lib/economics";
 import { computeVehicleEconomics } from "@/lib/economics";
+import { PAYMENT_FREQUENCIES } from "@/lib/finance-engine";
 import { toCents } from "@/lib/money";
+import { FINANCE_RATE_POLICIES } from "@/lib/rate-policy";
 import { assertTransition, deriveListingStatus } from "@/lib/vehicle-status";
 import { assertCapability, type OperationContext } from "./context";
 import { rethrowUniqueViolation } from "./db-errors";
@@ -22,6 +30,12 @@ import { centsSchema, positiveCentsSchema, recordIdSchema } from "./schemas";
  * event all occur in ONE transaction: a vehicle marked SOLD with no recorded
  * price would be a permanent hole in the dealership's books.
  *
+ * PHASE 9B: when the caller supplies financing terms, the persisted payment,
+ * finance charge, total of payments and exposure are produced by
+ * `structureDeal()` — the canonical engine. This file never does amortisation
+ * arithmetic of its own, so the number stored on the contract and the number
+ * the Deal Desk displays cannot diverge.
+ *
  * Actual profit is never recomputed here — it comes from
  * `computeVehicleEconomics()`, the same engine the sourcing screen uses.
  */
@@ -31,11 +45,54 @@ export const FINANCE_TYPES = [
   "FINANCE",
   "LEASE",
   "BUY_HERE_PAY_HERE",
+  "LEASE_TO_OWN",
   "UNDECIDED",
 ] as const satisfies readonly FinanceType[];
 
+/** The FinanceType values that map onto a payment mode the engine can build. */
+export const MODE_BY_FINANCE_TYPE: Partial<Record<FinanceType, DealPaymentMode>> = {
+  CASH: "CASH",
+  FINANCE: "EXTERNAL_FINANCE",
+  BUY_HERE_PAY_HERE: "BUY_HERE_PAY_HERE",
+  LEASE: "LEASE",
+  LEASE_TO_OWN: "LEASE_TO_OWN",
+};
+
+/**
+ * Compile-time proof that the engine's local finance-type union is a SUBSET of
+ * the generated Prisma enum. If the schema ever drops a value the engine can
+ * emit, this stops compiling instead of failing at runtime.
+ */
+type AssertAssignable<T extends U, U> = true;
+type _FinanceTypeMirrorIsSound = AssertAssignable<DealFinanceType, FinanceType>;
+
 /** Deal states that release a vehicle: they no longer hold it. */
 export const DEAD_DEAL_STATUSES = ["CANCELLED", "LOST"] as const satisfies readonly DealStatus[];
+
+/** Structured terms accepted alongside a sale. All optional: a cash deal needs none. */
+export const dealTermsSchema = z.object({
+  lenderName: z.string().trim().max(200).optional(),
+  /** 60.00% is the ceiling the database enforces (`deals_apr_sane`). */
+  aprBasisPoints: z.number().int().min(0).max(6_000).optional(),
+  /** 180 months is the ceiling the database enforces (`deals_term_sane`). */
+  termMonths: z.number().int().min(1).max(180).optional(),
+  paymentFrequency: z.enum(PAYMENT_FREQUENCIES).optional(),
+  firstPaymentDate: z.coerce.date().optional(),
+  downPaymentCents: centsSchema.optional(),
+  salesTaxBasisPoints: z.number().int().min(0).max(2_000).optional(),
+  tradeInAllowanceCents: centsSchema.optional(),
+  tradeInPayoffCents: centsSchema.optional(),
+  /** The jurisdiction whose configured rate policy governs this deal. */
+  ratePolicyJurisdiction: z.string().trim().min(2).max(8).optional(),
+  lease: z
+    .object({
+      residualValueCents: centsSchema,
+      capCostReductionCents: centsSchema.optional(),
+      moneyFactorAprBasisPoints: z.number().int().min(0).max(6_000).optional(),
+      purchaseOptionCents: centsSchema.optional(),
+    })
+    .optional(),
+});
 
 export const completeSaleSchema = z.object({
   vehicleId: recordIdSchema,
@@ -50,6 +107,7 @@ export const completeSaleSchema = z.object({
   financeType: z.enum(FINANCE_TYPES).optional(),
   saleDate: z.coerce.date().optional(),
   notes: z.string().trim().max(5_000).optional(),
+  terms: dealTermsSchema.optional(),
 });
 
 export type CompleteSaleInput = z.input<typeof completeSaleSchema>;
@@ -60,7 +118,8 @@ export type CompleteSaleInput = z.input<typeof completeSaleSchema>;
  * Cost-derived fields are nullable because a role without `finance:read`
  * receives `null`: a salesperson may complete a sale without being handed the
  * dealership's cost basis. The field names are chosen so
- * `maskVehicleFinancials()` strips them automatically.
+ * `maskVehicleFinancials()` strips them automatically — including the Phase 9B
+ * dealer economics added here.
  */
 export type SaleResult = {
   dealId: string;
@@ -75,7 +134,35 @@ export type SaleResult = {
   actualGrossProfitCents: Cents | null;
   actualRoiBasisPoints: BasisPoints | null;
   landedCost: LandedCostBreakdown | null;
+
+  // ---- Phase 9B: the customer's contract terms (safe to show the salesperson)
+  financeType: FinanceType;
+  paymentFrequency: PrismaPaymentFrequency;
+  numberOfPayments: number | null;
+  paymentAmountCents: Cents | null;
+  finalPaymentCents: Cents | null;
+  firstPaymentDateIso: string | null;
+  amountFinancedCents: Cents | null;
+  downPaymentCents: Cents | null;
+  salesTaxCents: Cents | null;
+  financeChargeCents: Cents | null;
+  totalOfPaymentsCents: Cents | null;
+  aprBasisPoints: BasisPoints | null;
+  termMonths: number | null;
+
+  // ---- Phase 9B: dealership economics (stripped for roles without finance:read)
+  vehicleGrossCents: Cents | null;
+  dealerCapitalStillExposedCents: Cents | null;
+  projectedFinanceIncomeCents: Cents | null;
+  combinedExpectedEconomicsCents: Cents | null;
+
+  /** The configured-policy check that was recorded, if a policy applied. */
+  ratePolicyId: string | null;
+  ratePolicyCeilingBasisPoints: BasisPoints | null;
+  ratePolicyStatement: string | null;
+  riskFlags: string[];
 };
+
 
 function assertContactable(customer: { phone?: string | null; email?: string | null }): void {
   const hasPhone = typeof customer.phone === "string" && customer.phone.trim() !== "";
@@ -144,15 +231,59 @@ export async function completeVehicleSale(
         );
       }
 
+      // The cost basis is computed FIRST, because the deal's payment schedule is
+      // derived from it and has to be written in the same transaction.
+      const [reconItems, expenses] = await Promise.all([
+        tx.vehicleReconItem.findMany({
+          where: { vehicleId: vehicle.id },
+          select: { estimateCents: true, actualCostCents: true },
+        }),
+        tx.expense.findMany({ where: { vehicleId: vehicle.id }, select: { amountCents: true } }),
+      ]);
+
+      const economics = computeVehicleEconomics({
+        acquisition: {
+          acquisitionPriceCents: vehicle.acquisitionPriceCents,
+          auctionFeesCents: vehicle.auctionFeesCents,
+          transportationCents: vehicle.transportationCents,
+          inspectionCents: vehicle.inspectionCents,
+          otherAcquisitionCents: vehicle.otherAcquisitionCents,
+        },
+        reconItems,
+        reconOverrideCents: vehicle.reconOverrideCents,
+        additionalExpenseCents: expenses.reduce((total, row) => total + toCents(row.amountCents), 0),
+        targetRetailPriceCents: vehicle.targetRetailPriceCents,
+        askingPriceCents: vehicle.askingPriceCents,
+        minimumApprovedCents: vehicle.minimumApprovedCents,
+        acquisitionDate: vehicle.acquisitionDate,
+        dateSold: saleDate,
+        finalSalePriceCents: input.salePriceCents,
+      });
+
+      const financeType = input.financeType ?? liveDeal?.financeType ?? ("UNDECIDED" as const);
+      const dealerFeesCents = input.dealerFeesCents ?? liveDeal?.dealerFeesCents ?? 0;
+
+      // The canonical engine builds the contract; this operation only persists
+      // what it returns. A rate that breaches a CONFIGURED policy stops here.
+      const structure = structureForSale({
+        financeType,
+        input,
+        vehicleModelYear: vehicle.year,
+        landedCostCents: economics.landedCost.landedCostCents,
+        dealerFeesCents,
+        saleDate,
+      });
+
       const dealData = {
         salePriceCents: input.salePriceCents,
         status: "CONTRACTED" as const,
         saleDate,
         salespersonId: liveDeal?.salespersonId ?? ctx.actor.id,
-        dealerFeesCents: input.dealerFeesCents ?? liveDeal?.dealerFeesCents ?? 0,
-        financeType: input.financeType ?? liveDeal?.financeType ?? ("UNDECIDED" as const),
+        dealerFeesCents,
+        financeType,
         leadId: input.leadId ?? liveDeal?.leadId ?? null,
         notes: input.notes ?? liveDeal?.notes ?? null,
+        ...(structure === null ? {} : structureColumns(structure, input)),
       };
 
       const deal = liveDeal
@@ -186,33 +317,6 @@ export async function completeVehicleSale(
         },
       });
 
-      const [reconItems, expenses] = await Promise.all([
-        tx.vehicleReconItem.findMany({
-          where: { vehicleId: vehicle.id },
-          select: { estimateCents: true, actualCostCents: true },
-        }),
-        tx.expense.findMany({ where: { vehicleId: vehicle.id }, select: { amountCents: true } }),
-      ]);
-
-      const economics = computeVehicleEconomics({
-        acquisition: {
-          acquisitionPriceCents: vehicle.acquisitionPriceCents,
-          auctionFeesCents: vehicle.auctionFeesCents,
-          transportationCents: vehicle.transportationCents,
-          inspectionCents: vehicle.inspectionCents,
-          otherAcquisitionCents: vehicle.otherAcquisitionCents,
-        },
-        reconItems,
-        reconOverrideCents: vehicle.reconOverrideCents,
-        additionalExpenseCents: expenses.reduce((total, row) => total + toCents(row.amountCents), 0),
-        targetRetailPriceCents: vehicle.targetRetailPriceCents,
-        askingPriceCents: vehicle.askingPriceCents,
-        minimumApprovedCents: vehicle.minimumApprovedCents,
-        acquisitionDate: vehicle.acquisitionDate,
-        dateSold: saleDate,
-        finalSalePriceCents: input.salePriceCents,
-      });
-
       const result: SaleResult = {
         dealId: deal.id,
         vehicleId: vehicle.id,
@@ -226,6 +330,7 @@ export async function completeVehicleSale(
         actualGrossProfitCents: economics.actualGrossProfitCents,
         actualRoiBasisPoints: economics.actualRoiBasisPoints,
         landedCost: economics.landedCost,
+        ...saleStructureFields(financeType, structure),
       };
 
       return maskVehicleFinancials(result, ctx.actor);
@@ -239,6 +344,279 @@ export async function completeVehicleSale(
       "That sale conflicts with an existing record.",
     );
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* PHASE 9B — persisting a structured deal                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Builds the deal's payment structure through the canonical engine.
+ *
+ * Returns `null` — meaning "this sale carries no structured terms yet" — in two
+ * cases only:
+ *   - the finance type is UNDECIDED, or
+ *   - a financed deal was recorded without the terms needed to schedule it.
+ * Both keep the pre-Phase-9B behaviour exactly: the sale is recorded, and the
+ * payment fields stay NULL rather than being filled with invented terms.
+ *
+ * A rate that breaches a CONFIGURED rate policy stops the sale with a precise
+ * error. It never silently rewrites the rate.
+ */
+function structureForSale(params: {
+  financeType: FinanceType;
+  input: z.output<typeof completeSaleSchema>;
+  vehicleModelYear: number;
+  landedCostCents: Cents;
+  dealerFeesCents: Cents;
+  saleDate: Date;
+}): DealStructure | null {
+  const mode = MODE_BY_FINANCE_TYPE[params.financeType];
+  if (!mode) return null;
+
+  const terms = params.input.terms;
+  const isLeaseMode = mode === "LEASE" || mode === "LEASE_TO_OWN";
+
+  if (mode !== "CASH") {
+    const hasTerm = terms?.termMonths !== undefined;
+    const hasRate =
+      terms?.aprBasisPoints !== undefined ||
+      (isLeaseMode && terms?.lease?.moneyFactorAprBasisPoints !== undefined);
+    if (!hasTerm || !hasRate) return null;
+    if (isLeaseMode && terms?.lease === undefined) return null;
+  }
+
+  // A jurisdiction is only consulted when the caller NAMES one: the software
+  // never assumes which jurisdiction's policy governs a deal.
+  const jurisdiction = terms?.ratePolicyJurisdiction;
+
+  const structure = structureDeal({
+    mode,
+    sellingPriceCents: params.input.salePriceCents,
+    landedCostCents: params.landedCostCents,
+    dealerFeesCents: params.dealerFeesCents,
+    salesTaxBasisPoints: terms?.salesTaxBasisPoints,
+    tradeInAllowanceCents: terms?.tradeInAllowanceCents,
+    tradeInPayoffCents: terms?.tradeInPayoffCents,
+    downPaymentCents: terms?.downPaymentCents,
+    aprBasisPoints: terms?.aprBasisPoints,
+    termMonths: terms?.termMonths,
+    paymentFrequency: terms?.paymentFrequency,
+    firstPaymentDate: terms?.firstPaymentDate?.toISOString() ?? null,
+    lease: terms?.lease
+      ? {
+          residualValueCents: terms.lease.residualValueCents,
+          capCostReductionCents: terms.lease.capCostReductionCents,
+          moneyFactorAprBasisPoints: terms.lease.moneyFactorAprBasisPoints,
+          purchaseOptionCents: terms.lease.purchaseOptionCents,
+        }
+      : null,
+    ratePolicy: {
+      policies: jurisdiction === undefined ? [] : FINANCE_RATE_POLICIES,
+      jurisdiction: jurisdiction ?? "",
+      asOf: params.saleDate,
+      vehicleModelYear: params.vehicleModelYear,
+    },
+  });
+
+  if (structure.ratePolicy.withinConfiguredRatePolicy === false) {
+    throw new ActionError(`${structure.ratePolicy.statement} ${structure.ratePolicy.disclaimer}`, {
+      aprBasisPoints: ["Lower the rate, or update the configured rate policy."],
+    });
+  }
+
+  // A residual above the capitalised cost is not a lease, it is a typo, and the
+  // database constraint deals_lease_structure_sane would reject it. Refuse it
+  // here with a field error the operator can act on instead of a raw DB error.
+  if (
+    structure.lease !== null &&
+    structure.lease.residualValueCents > structure.lease.grossCapCostCents
+  ) {
+    throw new ActionError(
+      "The residual value cannot exceed the capitalized cost of the lease.",
+      { residualValue: ["The residual value must be at or below the capitalized cost."] },
+    );
+  }
+
+  return structure;
+}
+
+/**
+ * The customer's remaining obligation at contract time.
+ *
+ * An instalment contract leaves the financed principal outstanding; a lease
+ * leaves its scheduled payments outstanding; a deal whose receivable belongs to
+ * a lender or was settled in cash leaves nothing outstanding for the dealer to
+ * collect. Nothing in this phase collects money — a later servicing phase
+ * maintains this figure.
+ */
+function remainingBalanceCentsFor(structure: DealStructure): Cents {
+  switch (structure.mode) {
+    case "BUY_HERE_PAY_HERE":
+    case "LEASE_TO_OWN":
+    case "LEASE":
+      return structure.mode === "LEASE" ? structure.totalOfPaymentsCents : structure.amounts.amountFinancedCents;
+    case "CASH":
+    case "EXTERNAL_FINANCE":
+      return 0;
+  }
+}
+
+/** The Prisma column values a structured deal persists. */
+function structureColumns(
+  structure: DealStructure,
+  input: z.output<typeof completeSaleSchema>,
+): {
+  paymentFrequency: PrismaPaymentFrequency;
+  paymentAmountCents: number;
+  finalPaymentCents: number;
+  /** Null when there is no schedule (a cash deal), never 0. */
+  numberOfPayments: number | null;
+  firstPaymentDate: Date | null;
+  salesTaxCents: number;
+  financeChargeCents: number;
+  totalOfPaymentsCents: number;
+  remainingBalanceCents: number;
+  aprBasisPoints: number;
+  termMonths: number | null;
+  downPaymentCents: number;
+  amountFinancedCents: number;
+  tradeInAllowanceCents: number;
+  tradeInPayoffCents: number;
+  lenderName: string | null;
+  capitalizedCostCents: number | null;
+  capCostReductionCents: number | null;
+  residualValueCents: number | null;
+  moneyFactorAprBasisPoints: number | null;
+  purchaseOptionCents: number | null;
+  ratePolicyId: string | null;
+  ratePolicyCeilingBasisPoints: number | null;
+  ratePolicyEvaluatedAt: Date | null;
+} {
+  return {
+    paymentFrequency: structure.paymentFrequency as PrismaPaymentFrequency,
+    paymentAmountCents: structure.paymentAmountCents,
+    finalPaymentCents: structure.finalPaymentCents,
+    // A structure with no scheduled payments (a cash deal, or a financed deal
+    // whose balance is zero) records NULL, not 0: "no schedule" and "a schedule
+    // of zero payments" are different facts, and the constraint
+    // deals_payment_schedule_sane requires a positive count when one is stored.
+    numberOfPayments: structure.numberOfPayments === 0 ? null : structure.numberOfPayments,
+    firstPaymentDate: input.terms?.firstPaymentDate ?? null,
+    salesTaxCents: structure.amounts.salesTaxCents,
+    financeChargeCents: structure.financeChargeCents,
+    totalOfPaymentsCents: structure.totalOfPaymentsCents,
+    remainingBalanceCents: remainingBalanceCentsFor(structure),
+    aprBasisPoints: structure.aprBasisPoints,
+    // A cash deal has no term. Zero is not a term (the database constraint
+    // deals_term_sane requires a positive value), so "no term" is NULL.
+    termMonths: structure.termMonths === 0 ? null : structure.termMonths,
+    downPaymentCents: structure.amounts.downPaymentCents,
+    amountFinancedCents: structure.amounts.amountFinancedCents,
+    tradeInAllowanceCents: structure.amounts.tradeInAllowanceCents,
+    tradeInPayoffCents: structure.amounts.tradeInPayoffCents,
+    lenderName: input.terms?.lenderName ?? null,
+    capitalizedCostCents: structure.lease?.grossCapCostCents ?? null,
+    capCostReductionCents: structure.lease?.capCostReductionCents ?? null,
+    residualValueCents: structure.lease?.residualValueCents ?? null,
+    moneyFactorAprBasisPoints:
+      structure.mode === "LEASE" || structure.mode === "LEASE_TO_OWN" ? structure.aprBasisPoints : null,
+    purchaseOptionCents: structure.lease?.purchaseOptionCents ?? null,
+    // A cash deal has no rate, so recording "which rate policy was checked"
+    // would be meaningless. The snapshot is only written when a rate exists.
+    ratePolicyId: structure.mode === "CASH" ? null : structure.ratePolicy.policyId,
+    ratePolicyCeilingBasisPoints:
+      structure.mode === "CASH" ? null : structure.ratePolicy.policyCeilingBasisPoints,
+    ratePolicyEvaluatedAt:
+      structure.mode === "CASH" || structure.ratePolicy.policyId === null ? null : new Date(),
+  };
+}
+
+type SaleStructureFields = Pick<
+  SaleResult,
+  | "financeType"
+  | "paymentFrequency"
+  | "numberOfPayments"
+  | "paymentAmountCents"
+  | "finalPaymentCents"
+  | "firstPaymentDateIso"
+  | "amountFinancedCents"
+  | "downPaymentCents"
+  | "salesTaxCents"
+  | "financeChargeCents"
+  | "totalOfPaymentsCents"
+  | "aprBasisPoints"
+  | "termMonths"
+  | "vehicleGrossCents"
+  | "dealerCapitalStillExposedCents"
+  | "projectedFinanceIncomeCents"
+  | "combinedExpectedEconomicsCents"
+  | "ratePolicyId"
+  | "ratePolicyCeilingBasisPoints"
+  | "ratePolicyStatement"
+  | "riskFlags"
+>;
+
+/**
+ * Flat projection of the structure onto the sale result.
+ *
+ * Deliberately FLAT: role masking nulls top-level keys only, so nesting the
+ * dealer economics inside a `structure` object would smuggle cost data past
+ * `maskVehicleFinancials()`. The dealer-only keys added here are also listed in
+ * that mask.
+ */
+function saleStructureFields(financeType: FinanceType, structure: DealStructure | null): SaleStructureFields {
+  if (structure === null) {
+    // No structured terms: the dealer-economics fields stay null and
+    // `actualGrossProfitCents` remains the authoritative gross for this sale.
+    return {
+      financeType,
+      paymentFrequency: "MONTHLY",
+      numberOfPayments: null,
+      paymentAmountCents: null,
+      finalPaymentCents: null,
+      firstPaymentDateIso: null,
+      amountFinancedCents: null,
+      downPaymentCents: null,
+      salesTaxCents: null,
+      financeChargeCents: null,
+      totalOfPaymentsCents: null,
+      aprBasisPoints: null,
+      termMonths: null,
+      vehicleGrossCents: null,
+      dealerCapitalStillExposedCents: null,
+      projectedFinanceIncomeCents: null,
+      combinedExpectedEconomicsCents: null,
+      ratePolicyId: null,
+      ratePolicyCeilingBasisPoints: null,
+      ratePolicyStatement: null,
+      riskFlags: [],
+    };
+  }
+
+  return {
+    financeType,
+    paymentFrequency: structure.paymentFrequency as PrismaPaymentFrequency,
+    numberOfPayments: structure.numberOfPayments,
+    paymentAmountCents: structure.paymentAmountCents,
+    finalPaymentCents: structure.finalPaymentCents,
+    firstPaymentDateIso: structure.firstPaymentDate,
+    amountFinancedCents: structure.amounts.amountFinancedCents,
+    downPaymentCents: structure.amounts.downPaymentCents,
+    salesTaxCents: structure.amounts.salesTaxCents,
+    financeChargeCents: structure.financeChargeCents,
+    totalOfPaymentsCents: structure.totalOfPaymentsCents,
+    aprBasisPoints: structure.aprBasisPoints,
+    termMonths: structure.termMonths,
+    vehicleGrossCents: structure.vehicleGrossCents,
+    dealerCapitalStillExposedCents: structure.dealerCapitalStillExposedCents,
+    projectedFinanceIncomeCents: structure.projectedFinanceIncomeCents,
+    combinedExpectedEconomicsCents: structure.combinedExpectedEconomicsCents,
+    ratePolicyId: structure.ratePolicy.policyId,
+    ratePolicyCeilingBasisPoints: structure.ratePolicy.policyCeilingBasisPoints,
+    ratePolicyStatement: structure.ratePolicy.withinConfiguredRatePolicy === null ? null : structure.ratePolicy.statement,
+    riskFlags: structure.riskFlags,
+  };
 }
 
 /** Resolves the buyer, creating the customer when new details were supplied. */
@@ -363,4 +741,136 @@ export async function liveDealForVehicle(
     where: { vehicleId: id, status: { notIn: ["CANCELLED", "LOST"] } },
     select: { id: true, status: true, customerId: true },
   });
+}
+
+/**
+ * The full terms of the live deal on a vehicle — Phase 9B.
+ *
+ * WHY THIS EXISTS
+ * Phase 9A could not show a deal's terms because no operation returned them,
+ * and Phase 9B persists a structured deal that would otherwise be write-only.
+ * This is the read that makes the structured deal visible and auditable.
+ *
+ * Every field here is a CONTRACT term the buyer is entitled to see (price,
+ * down payment, amount financed, rate, term, payment, finance charge, trade-in,
+ * official workflow status) or a record of which configured rate policy was
+ * checked. None of it is dealership cost, so no field-level masking applies;
+ * the caller still holds `deals:read`.
+ *
+ * Nested objects are avoided on purpose: role masking nulls top-level keys, so
+ * a nested payload could smuggle data past it.
+ *
+ * Capability: `deals:read`.
+ */
+export interface DealTermsView {
+  dealId: string;
+  status: DealStatus;
+  customerId: string;
+  customerName: string;
+  leadId: string | null;
+  salespersonId: string | null;
+
+  financeType: FinanceType;
+  lenderName: string | null;
+
+  askingPriceCents: Cents;
+  negotiatedPriceCents: Cents | null;
+  salePriceCents: Cents | null;
+  dealerFeesCents: Cents;
+  salesTaxCents: Cents | null;
+
+  tradeInAllowanceCents: Cents | null;
+  tradeInPayoffCents: Cents | null;
+
+  downPaymentCents: Cents | null;
+  amountFinancedCents: Cents | null;
+  aprBasisPoints: BasisPoints | null;
+  termMonths: number | null;
+  paymentFrequency: PrismaPaymentFrequency;
+  numberOfPayments: number | null;
+  paymentAmountCents: Cents | null;
+  finalPaymentCents: Cents | null;
+  firstPaymentDateIso: string | null;
+  financeChargeCents: Cents | null;
+  totalOfPaymentsCents: Cents | null;
+  remainingBalanceCents: Cents | null;
+
+  capitalizedCostCents: Cents | null;
+  capCostReductionCents: Cents | null;
+  residualValueCents: Cents | null;
+  moneyFactorAprBasisPoints: BasisPoints | null;
+  purchaseOptionCents: Cents | null;
+
+  ratePolicyId: string | null;
+  ratePolicyCeilingBasisPoints: BasisPoints | null;
+  ratePolicyEvaluatedAtIso: string | null;
+
+  titleWorkStatus: string;
+  registrationStatus: string;
+  officialNotes: string | null;
+
+  saleDateIso: string | null;
+  deliveryDateIso: string | null;
+  notes: string | null;
+  createdAtIso: string;
+}
+
+export async function getLiveDealForVehicle(
+  ctx: OperationContext,
+  vehicleId: string,
+): Promise<DealTermsView | null> {
+  assertCapability(ctx, "deals:read");
+
+  const id = recordIdSchema.parse(vehicleId);
+  const deal = await ctx.db.deal.findFirst({
+    where: { vehicleId: id, status: { notIn: ["CANCELLED", "LOST"] } },
+    include: { customer: { select: { firstName: true, lastName: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!deal) return null;
+
+  return {
+    dealId: deal.id,
+    status: deal.status,
+    customerId: deal.customerId,
+    customerName: `${deal.customer.firstName} ${deal.customer.lastName ?? ""}`.trim(),
+    leadId: deal.leadId,
+    salespersonId: deal.salespersonId,
+    financeType: deal.financeType,
+    lenderName: deal.lenderName,
+    askingPriceCents: deal.askingPriceCents,
+    negotiatedPriceCents: deal.negotiatedPriceCents,
+    salePriceCents: deal.salePriceCents,
+    dealerFeesCents: deal.dealerFeesCents,
+    salesTaxCents: deal.salesTaxCents,
+    tradeInAllowanceCents: deal.tradeInAllowanceCents,
+    tradeInPayoffCents: deal.tradeInPayoffCents,
+    downPaymentCents: deal.downPaymentCents,
+    amountFinancedCents: deal.amountFinancedCents,
+    aprBasisPoints: deal.aprBasisPoints,
+    termMonths: deal.termMonths,
+    paymentFrequency: deal.paymentFrequency,
+    numberOfPayments: deal.numberOfPayments,
+    paymentAmountCents: deal.paymentAmountCents,
+    finalPaymentCents: deal.finalPaymentCents,
+    firstPaymentDateIso: deal.firstPaymentDate?.toISOString() ?? null,
+    financeChargeCents: deal.financeChargeCents,
+    totalOfPaymentsCents: deal.totalOfPaymentsCents,
+    remainingBalanceCents: deal.remainingBalanceCents,
+    capitalizedCostCents: deal.capitalizedCostCents,
+    capCostReductionCents: deal.capCostReductionCents,
+    residualValueCents: deal.residualValueCents,
+    moneyFactorAprBasisPoints: deal.moneyFactorAprBasisPoints,
+    purchaseOptionCents: deal.purchaseOptionCents,
+    ratePolicyId: deal.ratePolicyId,
+    ratePolicyCeilingBasisPoints: deal.ratePolicyCeilingBasisPoints,
+    ratePolicyEvaluatedAtIso: deal.ratePolicyEvaluatedAt?.toISOString() ?? null,
+    titleWorkStatus: deal.titleWorkStatus,
+    registrationStatus: deal.registrationStatus,
+    officialNotes: deal.officialNotes,
+    saleDateIso: deal.saleDate?.toISOString() ?? null,
+    deliveryDateIso: deal.deliveryDate?.toISOString() ?? null,
+    notes: deal.notes,
+    createdAtIso: deal.createdAt.toISOString(),
+  };
 }

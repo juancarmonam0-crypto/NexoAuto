@@ -1,3 +1,7 @@
+import {
+  computeContractAmounts,
+  computeLevelPaymentCents,
+} from "./finance-engine";
 import { type BasisPoints, type Cents, applyBasisPoints, toCents } from "./money";
 
 /**
@@ -52,6 +56,12 @@ export interface PaymentEstimate {
  *   i = apr / 12
  *   payment = P * i * (1+i)^n / ((1+i)^n - 1)
  * With 0% APR this reduces to P / n.
+ *
+ * PHASE 9B: the arithmetic itself lives in `finance-engine.ts`, the canonical
+ * engine. This function keeps the estimator's historical clamping (a term of at
+ * least one month, a non-negative rate) and delegates the formula, so the
+ * public estimator and a contracted deal can never disagree about what a
+ * payment is.
  */
 export function estimateMonthlyPaymentCents(
   principalCents: Cents,
@@ -61,12 +71,7 @@ export function estimateMonthlyPaymentCents(
   const principal = toCents(principalCents);
   if (principal === 0) return 0;
   const months = Math.max(1, Math.round(termMonths));
-  const monthlyRate = Math.max(0, aprBasisPoints) / 10_000 / 12;
-  if (monthlyRate === 0) return Math.round(principal / months);
-
-  const growth = (1 + monthlyRate) ** months;
-  const payment = (principal * monthlyRate * growth) / (growth - 1);
-  return Math.round(payment);
+  return computeLevelPaymentCents(principal, Math.max(0, Math.round(aprBasisPoints)), months, "MONTHLY");
 }
 
 export function estimatePayment(input: PaymentEstimateInput): PaymentEstimate {
@@ -101,10 +106,16 @@ export function estimatePayment(input: PaymentEstimateInput): PaymentEstimate {
   const taxableAmountCents = Math.max(0, priceCents - tradeInAllowanceCents);
   const salesTaxCents = applyBasisPoints(taxableAmountCents, Math.max(0, input.salesTaxBasisPoints ?? 0));
 
-  const amountFinancedCents = Math.max(
-    0,
-    priceCents + salesTaxCents + dealerFeesCents - downPaymentCents - tradeInAllowanceCents,
-  );
+  // The contract arithmetic is the canonical engine's; the sales tax computed
+  // just above is passed in so this estimator keeps its exact historical result.
+  const contract = computeContractAmounts({
+    sellingPriceCents: priceCents,
+    dealerFeesCents,
+    salesTaxCents,
+    tradeInAllowanceCents,
+    downPaymentCents: downPaymentCents,
+  });
+  const amountFinancedCents = contract.amountFinancedCents;
 
   const monthlyPaymentCents = estimateMonthlyPaymentCents(amountFinancedCents, aprBasisPoints, termMonths);
   const totalOfPaymentsCents = monthlyPaymentCents * termMonths;
