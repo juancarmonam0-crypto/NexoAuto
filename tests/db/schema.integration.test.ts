@@ -181,7 +181,11 @@ describe.skipIf(!databaseConfigured)("database schema (real PostgreSQL)", () => 
     }
   });
 
-  it("records all three migrations as applied", async () => {
+  // PRE-EXISTING DEFECT FIXED (Phase 4): this assertion still listed only the
+  // three migrations that existed before Phase 3 added the Supabase
+  // compatibility migrations, so the committed suite failed against the
+  // committed migration chain. The expected list now mirrors prisma/migrations.
+  it("records the full canonical migration chain as applied", async () => {
     const rows = await prisma.$queryRawUnsafe<Array<{ migration_name: string }>>(
       `SELECT migration_name FROM _prisma_migrations
        WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name`,
@@ -190,6 +194,8 @@ describe.skipIf(!databaseConfigured)("database schema (real PostgreSQL)", () => 
       "0001_init",
       "0002_integrity_constraints",
       "0003_rls_and_public_surface",
+      "0004_public_views_read_only",
+      "0005_lock_prisma_migration_history",
     ]);
   });
 });

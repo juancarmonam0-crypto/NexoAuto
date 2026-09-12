@@ -1,5 +1,6 @@
 import { ZodError } from "zod";
 import { AuthorizationError } from "@/lib/auth/errors";
+import { DomainError } from "@/lib/domain-errors";
 
 /**
  * Typed result for every server action and public form handler.
@@ -64,10 +65,44 @@ export async function runAction<T>(
   }
 }
 
+/**
+ * Runs a domain OPERATION and wraps its value in an ActionResult.
+ *
+ * Operations (see `src/lib/operations`) return their result or throw; they do
+ * not know about forms or HTTP. This adapter is what a server action calls so
+ * a thrown NotFound/Conflict/Authorization error becomes a message the UI can
+ * render instead of an unhandled rejection.
+ */
+export async function runOperation<T>(
+  scope: string,
+  fn: () => Promise<T>,
+): Promise<ActionResult<T>> {
+  try {
+    return actionOk(await fn());
+  } catch (error) {
+    return actionFail(describeActionError(error, scope));
+  }
+}
+
+/**
+ * Error codes that carry a message already written for the operator.
+ *
+ * The domain state machines (`vehicle-status`, `lead-status`) raise typed
+ * errors for an illegal move. Their messages name the two states involved, so
+ * they are surfaced as-is rather than collapsed into a generic failure.
+ */
+const OPERATOR_FACING_CODES = new Set(["INVALID_TRANSITION", "INVALID_LEAD_TRANSITION"]);
+
 export function describeActionError(error: unknown, scope: string): string {
   if (error instanceof AuthorizationError) return error.message;
+  if (error instanceof DomainError) return error.message;
   if (error instanceof ActionError) return error.message;
   if (error instanceof ZodError) return "Please correct the highlighted fields.";
+
+  const code = (error as { code?: unknown } | null)?.code;
+  if (typeof code === "string" && OPERATOR_FACING_CODES.has(code)) {
+    return (error as Error).message;
+  }
 
   if (isPrismaUniqueViolation(error)) {
     const target = (error as { meta?: { target?: unknown } }).meta?.target;
@@ -75,8 +110,13 @@ export function describeActionError(error: unknown, scope: string): string {
     if (fields.includes("reservations")) {
       return "This vehicle already has an active reservation.";
     }
+    if (fields.includes("deals_one_live_per_vehicle")) {
+      return "This vehicle already has a live deal.";
+    }
     if (fields.includes("vin")) return "A vehicle with that VIN already exists.";
-    if (fields.includes("stock_number")) return "That stock number is already in use.";
+    if (fields.includes("stock_number") || fields.includes("stockNumber")) {
+      return "That stock number is already in use.";
+    }
     if (fields.includes("email")) return "That email address is already registered.";
     return "That record conflicts with an existing one.";
   }

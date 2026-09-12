@@ -88,36 +88,9 @@ export async function authorizeAny(capabilities: readonly Capability[]): Promise
 }
 
 /**
- * Strips every cost, margin and internal-floor field from a vehicle-shaped
- * object unless the viewer has `finance:read`.
- *
- * This is applied on the server before data is serialized to a client
- * component, so a salesperson cannot read the dealership's cost basis out of
- * the page payload.
+ * Financial-field masking now lives in the leaf module `./masking` so that
+ * server code which is not a Next.js request (the operations layer, unit tests)
+ * can use it without pulling in `next/navigation`. Re-exported here so existing
+ * imports keep working.
  */
-export function maskVehicleFinancials<T extends Record<string, unknown>>(
-  vehicle: T,
-  viewer: { role: UserRole },
-): T {
-  if (canViewFinancials(viewer.role)) return vehicle;
-
-  const masked: Record<string, unknown> = { ...vehicle };
-  const hidden = [
-    "acquisitionPriceCents",
-    "auctionFeesCents",
-    "transportationCents",
-    "inspectionCents",
-    "otherAcquisitionCents",
-    "reconOverrideCents",
-    "minimumApprovedCents",
-    "minimumApprovedPriceCents",
-  ];
-  for (const key of hidden) {
-    if (key in masked) masked[key] = null;
-  }
-  const nestedHidden = ["landedCostCents", "landedCost", "estimatedGrossProfitCents", "actualGrossProfitCents", "expectedProfitCents"];
-  for (const key of nestedHidden) {
-    if (key in masked) masked[key] = null;
-  }
-  return masked as T;
-}
+export { maskVehicleFinancials } from "@/lib/auth/masking";
