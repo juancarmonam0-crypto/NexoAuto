@@ -19,11 +19,10 @@ import {
  * into a card, and never carries baked text — it is the background composition,
  * and everything readable here is live, selectable, translatable HTML.
  *
- * RESPONSIVE RECOMPOSITION — one image, two crops, no second artwork:
+ * RESPONSIVE COMPOSITION — one image, two crops, no second artwork:
  *   ≥ lg   : image behind the copy, cropped to favour the car on the right.
- *   < lg   : copy on top, then the SAME image below cropped toward the vehicle
- *            (`object-[72%_50%]`), so the car stays dominant on a phone without
- *            shrinking the headline or hiding the car behind text.
+ *   < lg   : the SAME image stays behind the copy, cropped toward the vehicle,
+ *            with a light contrast fade preserving the live text's readability.
  *
  * THEME — the left of the artwork is light in both modes, so the copy stays deep
  * navy and legible without a scrim. Dark mode tints the surrounding band and the
@@ -33,12 +32,10 @@ import {
  * high-priority and dimensioned to reserve its box (no layout shift).
  */
 export function HomeHero({ s, ctaHref = "/inventory" }: { s: PublicStrings; ctaHref?: string }) {
-  const heroAlt = s.t("a11y.heroImage");
-
   return (
     <section className="relative isolate overflow-hidden border-b border-slate-200/70 bg-white dark:border-white/10 dark:bg-[var(--brand-navy-950)]">
-      {/* --- Desktop / tablet: the artwork is the section background --------- */}
-      <div className="absolute inset-0 hidden lg:block">
+      {/* --- The approved artwork is the section background at every size ---- */}
+      <div className="absolute inset-0">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={NEXO_HERO_LOCAL}
@@ -50,8 +47,8 @@ export function HomeHero({ s, ctaHref = "/inventory" }: { s: PublicStrings; ctaH
           loading="eager"
           decoding="async"
           fetchPriority="high"
-          // `object-right` keeps the SUV in frame and lets the copy own the left.
-          className="h-full w-full object-cover object-right"
+          // Mobile favours the vehicle; desktop lets the copy own the left.
+          className="h-full w-full object-cover object-[70%_50%] lg:object-right"
         />
         {/*
           A short, soft fade on the far left only — it extends the artwork's own
@@ -60,7 +57,7 @@ export function HomeHero({ s, ctaHref = "/inventory" }: { s: PublicStrings; ctaH
         */}
         <div
           aria-hidden="true"
-          className="absolute inset-y-0 left-0 w-[64%] bg-gradient-to-r from-white via-white/90 to-transparent dark:from-[var(--brand-navy-950)] dark:via-[var(--brand-navy-950)]/90"
+          className="absolute inset-0 bg-gradient-to-r from-white via-white/90 to-white/35 dark:from-[var(--brand-navy-950)] dark:via-[var(--brand-navy-950)]/90 dark:to-[var(--brand-navy-950)]/35 lg:right-auto lg:w-[64%] lg:to-transparent"
         />
       </div>
 
@@ -122,24 +119,6 @@ export function HomeHero({ s, ctaHref = "/inventory" }: { s: PublicStrings; ctaH
                 </li>
               ))}
             </ul>
-          </div>
-
-          {/* --- Mobile / tablet: the SAME approved artwork, recomposed ----- */}
-          <div className="lg:hidden">
-            <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 dark:border-white/10">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={NEXO_HERO_LOCAL}
-                alt={heroAlt}
-                width={NEXO_HERO_WIDTH}
-                height={NEXO_HERO_HEIGHT}
-                loading="eager"
-                decoding="async"
-                fetchPriority="high"
-                // Cropped toward the vehicle so the car stays the subject on a phone.
-                className="aspect-16/10 w-full object-cover object-[70%_50%]"
-              />
-            </div>
           </div>
         </div>
       </div>
