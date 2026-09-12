@@ -58,12 +58,12 @@ function vehicleFixture(overrides: Partial<Vehicle> = {}): Vehicle {
     dateListed: null,
     dateSold: null,
     finalSalePriceCents: null,
-    trackerDeviceId: null,
-    trackerStatus: "NOT_INSTALLED",
-    trackerLastLatitude: null,
-    trackerLastLongitude: null,
-    trackerLastSeenAt: null,
-    trackerGeofenceState: null,
+    trackerDeviceId: "TRK-9001",
+    trackerStatus: "ONLINE",
+    trackerLastLatitude: 29.7604,
+    trackerLastLongitude: -95.3698,
+    trackerLastSeenAt: new Date(Date.UTC(2026, 2, 1)),
+    trackerGeofenceState: "ON_LOT",
     createdAt: new Date(Date.UTC(2026, 0, 1)),
     updatedAt: new Date(Date.UTC(2026, 0, 1)),
     ...overrides,
@@ -110,6 +110,20 @@ const COST_FIELDS = [
 ] as const;
 
 const RESTRICTED: UserRole[] = ["SALES", "RECON", "VIEWER"];
+
+/**
+ * GPS fields gated by `tracker:read` (OWNER, MANAGER). A role that can read
+ * inventory is not automatically allowed to know which device is fitted or
+ * where the car was last seen.
+ */
+const TRACKER_FIELDS = [
+  "trackerDeviceId",
+  "trackerStatus",
+  "trackerLastLatitude",
+  "trackerLastLongitude",
+  "trackerLastSeenAt",
+  "trackerGeofenceState",
+] as const;
 
 describe("CARS — buildVehicleView is pure", () => {
   it("computes the view without touching the database", () => {
@@ -220,6 +234,8 @@ describe("CARS — financial masking by role", () => {
       expect(view.minimumApprovedCents, `${role} keeps the floor`).toBe(1_750_000);
       expect(view.frontEndMarginCents, `${role} keeps the front-end margin`).toBe(213_000);
       expect(view.landedCost, `${role} keeps the breakdown`).not.toBeNull();
+      expect(view.trackerDeviceId, `${role} keeps the tracker device`).toBe("TRK-9001");
+      expect(view.trackerLastLatitude, `${role} keeps the last position`).toBe(29.7604);
     }
   });
 
@@ -272,11 +288,12 @@ describe("CARS — financial masking by role", () => {
 
   it("only ever narrows the payload, never widens it", () => {
     const unrestricted = buildVehicleView(contextFor("OWNER"), loadedVehicle(), AS_OF) as Record<string, unknown>;
+    const withheld = [...COST_FIELDS, ...TRACKER_FIELDS] as readonly string[];
     for (const role of RESTRICTED) {
       const masked = buildVehicleView(contextFor(role), loadedVehicle(), AS_OF) as Record<string, unknown>;
       expect(Object.keys(masked).sort()).toEqual(Object.keys(unrestricted).sort());
       for (const key of Object.keys(masked)) {
-        if ((COST_FIELDS as readonly string[]).includes(key)) {
+        if (withheld.includes(key)) {
           expect(masked[key], `${role} must not receive ${key}`).toBeNull();
         } else {
           expect(masked[key], `${role} must keep ${key}`).toEqual(unrestricted[key]);
@@ -288,5 +305,34 @@ describe("CARS — financial masking by role", () => {
   it("does not invent keys that were not on the record", () => {
     const masked = maskVehicleFinancials({ id: "veh_2", askingPriceCents: 500_000 }, { role: "SALES" });
     expect(Object.keys(masked)).toEqual(["id", "askingPriceCents"]);
+  });
+});
+
+describe("CARS — tracker data obeys tracker:read", () => {
+  it("withholds the device and its position from roles without tracker:read", () => {
+    for (const role of RESTRICTED) {
+      const view = buildVehicleView(contextFor(role), loadedVehicle(), AS_OF);
+      for (const field of TRACKER_FIELDS) {
+        expect(view[field], `${role} must not receive ${field}`).toBeNull();
+      }
+    }
+  });
+
+  it("never leaks a device identifier or a coordinate into the serialized payload", () => {
+    for (const role of RESTRICTED) {
+      const serialized = JSON.stringify(buildVehicleView(contextFor(role), loadedVehicle(), AS_OF));
+      expect(serialized, `${role} leaked the tracker device`).not.toContain("TRK-9001");
+      expect(serialized, `${role} leaked a latitude`).not.toContain("29.7604");
+      expect(serialized, `${role} leaked a longitude`).not.toContain("95.3698");
+      expect(serialized, `${role} leaked the geofence state`).not.toContain("ON_LOT");
+    }
+  });
+
+  it("still lets every role see the vehicle itself", () => {
+    for (const role of RESTRICTED) {
+      const view = buildVehicleView(contextFor(role), loadedVehicle(), AS_OF);
+      expect(view.vin).toBe("1HGCM82633A004352");
+      expect(view.location).toBe("Lot A");
+    }
   });
 });

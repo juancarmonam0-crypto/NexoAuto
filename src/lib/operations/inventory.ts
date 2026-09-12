@@ -130,6 +130,33 @@ export type VehicleEconomicsSource = Pick<
   expenses: ReadonlyArray<Pick<Expense, "amountCents">>;
 };
 
+/**
+ * GPS/tracker fields.
+ *
+ * The `tracker:read` capability gates them (OWNER, MANAGER), yet the vehicle row
+ * carries them on every read. Returning the row wholesale would hand the device
+ * identifier and the vehicle's last known coordinates to any role that can read
+ * inventory — RECON, SALES and VIEWER included — silently bypassing the
+ * capability. Phase 3 already excludes these columns from the public views; this
+ * closes the same hole on the internal read path.
+ */
+const TRACKER_FIELDS = [
+  "trackerDeviceId",
+  "trackerStatus",
+  "trackerLastLatitude",
+  "trackerLastLongitude",
+  "trackerLastSeenAt",
+  "trackerGeofenceState",
+] as const;
+
+function stripTrackerFields<T extends Record<string, unknown>>(payload: T): T {
+  const copy: Record<string, unknown> = { ...payload };
+  for (const key of TRACKER_FIELDS) {
+    if (key in copy) copy[key] = null;
+  }
+  return copy as T;
+}
+
 /** Pure: turns a loaded vehicle into the flat, maskable payload. */
 export function buildVehicleView(
   ctx: OperationContext,
@@ -186,7 +213,8 @@ export function buildVehicleView(
     isSold: economics.isSold,
   };
 
-  return maskVehicleFinancials(view, ctx.actor);
+  const masked = maskVehicleFinancials(view, ctx.actor);
+  return actorCan(ctx, "tracker:read") ? masked : stripTrackerFields(masked);
 }
 
 const ECONOMICS_SELECT = {
@@ -592,6 +620,21 @@ const SALES_ONLY_STATUSES: Partial<Record<VehicleStatus, string>> = {
 /** Statuses that take a vehicle out of retail: a manager-level decision. */
 const MANAGER_ONLY_STATUSES: readonly VehicleStatus[] = ["WHOLESALE", "REJECTED"];
 
+/**
+ * Retail targets a vehicle with a RECORDED SALE must not re-enter.
+ *
+ * `vehicle-status.ts` allows SOLD -> LISTED ("a deal can be unwound"), but the
+ * only correct way to unwind is `cancelDeal`, which also clears
+ * `finalSalePriceCents` and `dateSold`. Letting the generic transition (or a
+ * plain republish) put the car back on sale would leave a LISTED, publicly
+ * visible vehicle that the economics engine still reports as sold, with a
+ * CONTRACTED deal attached to it.
+ */
+const SALE_MUST_BE_CANCELLED_FIRST: readonly VehicleStatus[] = ["LISTED"];
+
+const SOLD_VEHICLE_MESSAGE =
+  "This vehicle carries a recorded sale. Cancel the sale before returning it to the retail catalog.";
+
 export const statusTransitionSchema = z.object({
   vehicleId: recordIdSchema,
   toStatus: z.enum(ALL_VEHICLE_STATUSES),
@@ -625,9 +668,12 @@ export async function transitionVehicleStatus(
 
   const vehicle = await ctx.db.vehicle.findUnique({
     where: { id: input.vehicleId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, finalSalePriceCents: true },
   });
   if (!vehicle) throw new NotFoundError("That vehicle no longer exists.");
+  if (vehicle.finalSalePriceCents !== null && SALE_MUST_BE_CANCELLED_FIRST.includes(input.toStatus)) {
+    throw new ConflictError(SOLD_VEHICLE_MESSAGE);
+  }
 
   assertTransition(vehicle.status, input.toStatus);
 
@@ -673,9 +719,19 @@ export async function publishVehicle(
   const id = recordIdSchema.parse(vehicleId);
   const vehicle = await ctx.db.vehicle.findUnique({
     where: { id },
-    select: { id: true, status: true, listingStatus: true, askingPriceCents: true, dateListed: true },
+    select: {
+      id: true,
+      status: true,
+      listingStatus: true,
+      askingPriceCents: true,
+      dateListed: true,
+      finalSalePriceCents: true,
+    },
   });
   if (!vehicle) throw new NotFoundError("That vehicle no longer exists.");
+  if (vehicle.finalSalePriceCents !== null || vehicle.status === "SOLD" || vehicle.status === "DELIVERED") {
+    throw new ConflictError(SOLD_VEHICLE_MESSAGE);
+  }
   if (vehicle.listingStatus === "ACTIVE") throw new ConflictError("That vehicle is already published.");
   if (vehicle.askingPriceCents === null || vehicle.askingPriceCents <= 0) {
     throw new ConflictError("Set an asking price before publishing this vehicle.");
