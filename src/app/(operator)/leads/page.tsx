@@ -17,7 +17,7 @@ import { StatusBadge } from "@/app/_components/StatusBadge";
 import { createLeadAction, updateLeadStatusAction } from "@/app/actions/leads";
 import { hasCapability } from "@/lib/auth/roles";
 import { ALL_LEAD_STATUSES, allowedLeadTransitions, leadStatusLabel } from "@/lib/lead-status";
-import { listInventory } from "@/lib/operations/inventory";
+import { listInventoryOptions } from "@/lib/operations/inventory";
 import { CONTACT_METHODS, LEAD_SOURCES, listLeads } from "@/lib/operations/leads";
 import { pageOperationContext } from "@/lib/operations/runtime";
 
@@ -81,7 +81,10 @@ export default async function LeadsPage({
   const [{ items: leads, total }, { items: vehicles }] = await Promise.all([
     // `search`, `status` and `openOnly` are the operation's own filters.
     listLeads(ctx, { limit: 100, status, openOnly, search: search || undefined }),
-    listInventory(ctx, { limit: 100 }),
+    // LIGHTWEIGHT projection: the vehicle selector and the "vehicle of interest"
+    // label need a name and a stock number, not recon items, expenses, a landed
+    // cost or any derived financial figure. `listInventory` computes all of that.
+    listInventoryOptions(ctx, { limit: 200 }),
   ]);
 
   const canWrite = hasCapability(ctx.actor.role, "crm:write");

@@ -284,15 +284,213 @@ export async function listInventory(
   return { items: rows.map((row) => buildVehicleView(ctx, row)), total };
 }
 
+/**
+ * A LIGHTWEIGHT inventory projection, for selectors and labels only.
+ *
+ * WHY THIS EXISTS (performance hardening)
+ * A dropdown that lists "2021 Toyota Corolla (#P1234)" does not need recon items,
+ * expenses, a landed-cost calculation, tracker data, the full vehicle row or any
+ * derived financial figure. `listInventory()` computes all of that. This read
+ * selects exactly the columns a label needs, and NOTHING here is a business rule:
+ * it is a read projection, never a second source of truth for money or status.
+ *
+ * Capability: `inventory:read`. No economics, so no `finance:read` is involved.
+ */
+export interface InventoryOption {
+  id: string;
+  year: number;
+  make: string;
+  model: string;
+  trim: string | null;
+  stockNumber: string;
+  status: VehicleStatus;
+  listingStatus: ListingStatus;
+  askingPriceCents: number | null;
+}
+
+export const MAX_INVENTORY_OPTIONS = 500;
+
+export async function listInventoryOptions(
+  ctx: OperationContext,
+  rawFilter: { limit?: number; offset?: number } = {},
+): Promise<{ items: InventoryOption[]; total: number }> {
+  assertCapability(ctx, "inventory:read");
+
+  const limit = Math.min(Math.max(1, Math.trunc(rawFilter.limit ?? 200)), MAX_INVENTORY_OPTIONS);
+  const offset = Math.max(0, Math.trunc(rawFilter.offset ?? 0));
+
+  const [items, total] = await Promise.all([
+    ctx.db.vehicle.findMany({
+      select: {
+        id: true,
+        year: true,
+        make: true,
+        model: true,
+        trim: true,
+        stockNumber: true,
+        status: true,
+        listingStatus: true,
+        askingPriceCents: true,
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: limit,
+      skip: offset,
+    }),
+    ctx.db.vehicle.count(),
+  ]);
+
+  return { items, total };
+}
+
+/**
+ * A bounded COUNT for a badge, without loading a single row.
+ *
+ * The CARS screen needs the number of published vehicles. Deriving it from a
+ * `limit`ed list would be wrong the moment inventory exceeds that limit, so it is
+ * counted in the database instead.
+ *
+ * Capability: `inventory:read`.
+ */
+export async function countInventory(
+  ctx: OperationContext,
+  filter: { listingStatus?: ListingStatus; status?: VehicleStatus } = {},
+): Promise<number> {
+  assertCapability(ctx, "inventory:read");
+
+  return ctx.db.vehicle.count({
+    where: {
+      ...(filter.listingStatus ? { listingStatus: filter.listingStatus } : {}),
+      ...(filter.status ? { status: filter.status } : {}),
+    },
+  });
+}
+
+/** One lifecycle event, in the shape the detail page's timeline renders. */
+export type VehicleStatusEventView = {
+  id: string;
+  fromStatus: VehicleStatus | null;
+  toStatus: VehicleStatus;
+  note: string | null;
+  createdAt: Date;
+};
+
+/**
+ * The optional reads `getVehicleDetail()` can perform.
+ *
+ * The vehicle record itself is always loaded. Each section below is a read that
+ * only the screen rendering it needs, so the URL-driven tab — not the page —
+ * decides what the database is asked for.
+ *
+ *  - `economics` — the NARROW inputs the economics engine consumes (each recon
+ *    item's estimate/actual, each expense's amount), never the rows. A landed
+ *    cost cannot be computed without them, and nothing else on the page needs
+ *    them.
+ *  - `recon` — the full reconditioning rows, for the tab that lists them.
+ *  - `expenses` — the full expense rows, for the tab that lists them.
+ *  - `photos` — the gallery.
+ *  - `history` — the lifecycle events.
+ */
+export type VehicleDetailSection = "economics" | "recon" | "expenses" | "photos" | "history";
+
+/**
+ * Every section, in read order.
+ *
+ * This is the DEFAULT, because it is exactly the read this operation performed
+ * before sections existed: callers that predate the tab work (the sale action,
+ * the Deal Desk) keep their behaviour untouched, and only a tab-shaped caller
+ * narrows the read.
+ */
+const ALL_VEHICLE_DETAIL_SECTIONS = [
+  "economics",
+  "recon",
+  "expenses",
+  "photos",
+  "history",
+] as const satisfies readonly VehicleDetailSection[];
+
+/** The economics inputs, read as COLUMNS rather than as rows. */
+const RECON_COST_SELECT = {
+  estimateCents: true,
+  actualCostCents: true,
+} satisfies Prisma.VehicleReconItemSelect;
+
+const EXPENSE_COST_SELECT = {
+  amountCents: true,
+} satisfies Prisma.ExpenseSelect;
+
+export interface VehicleDetailOptions {
+  /**
+   * Which optional sections to read. Omitted means every one of them. A
+   * tab-shaped caller passes only what the active tab renders, so `?tab=overview`
+   * reads nothing beyond the vehicle row and its counts.
+   */
+  sections?: readonly VehicleDetailSection[];
+}
+
+/**
+ * The tab-badge counts.
+ *
+ * They come from a single `_count` inside the vehicle statement, so a tab strip
+ * reading "Recon 4 / Expenses 7" never costs a row load. `photos` is always
+ * present (photos are not capability-gated); the other two are present only for
+ * a role that may open the section — exactly like the rows themselves.
+ */
+export interface VehicleDetailCounts {
+  photos: number;
+  reconItems?: number;
+  expenses?: number;
+}
+
 export interface VehicleDetail {
   vehicle: VehicleInventoryView;
+  /**
+   * Empty unless the `photos` section was requested. The tab badge reads
+   * `counts.photos`, which is always the real count.
+   */
   photos: VehiclePhoto[];
-  statusEvents: Array<{ id: string; fromStatus: VehicleStatus | null; toStatus: VehicleStatus; note: string | null; createdAt: Date }>;
+  /** Empty unless the `history` section was requested. */
+  statusEvents: VehicleStatusEventView[];
   /** Present only for roles allowed to see spend. */
   expenses?: Expense[];
   /** Present only for roles allowed to see reconditioning. */
   reconItems?: VehicleReconItem[];
+  /** Tab badge counts, read with `_count` rather than by loading rows. */
+  counts: VehicleDetailCounts;
   publiclyVisible: boolean;
+}
+
+/**
+ * The view fields that exist only because the recon and expense inputs were
+ * read.
+ *
+ * When the active tab does not ask for them, those inputs are never loaded, so
+ * these figures are WITHHELD rather than computed against an empty set: a landed
+ * cost that ignored recon and expenses would be a fabricated number, and `null`
+ * renders as "not recorded", never as $0.
+ *
+ * Everything else in the economics view comes from the vehicle row itself —
+ * asking, target and minimum price, expected sale price, days in inventory, the
+ * sold flag and the negotiating room between asking and the floor — and stays
+ * exact.
+ */
+const COST_INPUT_DERIVED_FIELDS = [
+  "landedCostCents",
+  "estimatedGrossProfitCents",
+  "actualGrossProfitCents",
+  "expectedProfitCents",
+  "estimatedRoiBasisPoints",
+  "actualRoiBasisPoints",
+  "frontEndMarginCents",
+  "landedCost",
+] as const;
+
+/** Generic like `maskVehicleFinancials`: narrows a payload, never invents a key. */
+function withholdCostInputDerivedFields<T extends Record<string, unknown>>(view: T): T {
+  const withheld: Record<string, unknown> = { ...view };
+  for (const field of COST_INPUT_DERIVED_FIELDS) {
+    if (field in withheld) withheld[field] = null;
+  }
+  return withheld as T;
 }
 
 /**
@@ -301,42 +499,103 @@ export interface VehicleDetail {
  * Cost detail is not merely masked but omitted: a role without `expenses:read`
  * never receives the expense rows, and a role without `recon:write` never
  * receives the recon items.
+ *
+ * WHAT THE CALLER ASKS FOR IS WHAT IS READ. Every optional read below is driven
+ * by `options.sections`, so the tab that is actually rendered decides the
+ * queries. The core read is ONE statement — the vehicle row plus the three
+ * `_count` subqueries that feed the tab badges — and the full recon/expense
+ * rows, the gallery and the lifecycle events are fetched only for the tab that
+ * displays them. Every tab used to load all of them, which meant a role that
+ * could see spend paid for recon and expense data TWICE: once as economics
+ * inputs and once as rows.
+ *
+ * A section can never widen what a role receives. `recon` and `expenses` are
+ * still gated by `recon:write` / `expenses:read`, an unauthorized section is not
+ * even queried, and a section that was not read stays absent — no rows, and no
+ * cost figure computed from inputs nobody loaded — so the page renders its
+ * existing empty state rather than a value that was never read.
  */
 export async function getVehicleDetail(
   ctx: OperationContext,
   vehicleId: string,
+  options: VehicleDetailOptions = {},
 ): Promise<VehicleDetail> {
   assertCapability(ctx, "inventory:read");
 
   const id = recordIdSchema.parse(vehicleId);
-  const vehicle = await ctx.db.vehicle.findUnique({
-    where: { id },
-    include: ECONOMICS_SELECT,
-  });
+  const requested = new Set<VehicleDetailSection>(options.sections ?? ALL_VEHICLE_DETAIL_SECTIONS);
+
+  // SECURITY (unchanged, now evaluated per section): the role gate is applied
+  // BEFORE the read, so requesting a section cannot make the server fetch — or
+  // return — data the acting role may not see.
+  const loadReconRows = requested.has("recon") && actorCan(ctx, "recon:write");
+  const loadExpenseRows = requested.has("expenses") && actorCan(ctx, "expenses:read");
+  const loadPhotos = requested.has("photos");
+  const loadHistory = requested.has("history");
+
+  // The economics engine needs both inputs, and only the `economics` section
+  // asks for them. When a full-row section is loaded anyway, those rows ARE the
+  // inputs — which is what removes the double fetch.
+  const loadCostInputs = requested.has("economics");
+  const loadReconCostInputs = loadCostInputs && !loadReconRows;
+  const loadExpenseCostInputs = loadCostInputs && !loadExpenseRows;
+
+  const [vehicle, photos, statusEvents, reconRows, expenseRows, reconCostInputs, expenseCostInputs] =
+    await Promise.all([
+      ctx.db.vehicle.findUnique({
+        where: { id },
+        include: { _count: { select: { photos: true, reconItems: true, expenses: true } } },
+      }),
+      loadPhotos
+        ? ctx.db.vehiclePhoto.findMany({
+            where: { vehicleId: id },
+            orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          })
+        : Promise.resolve<VehiclePhoto[]>([]),
+      loadHistory
+        ? ctx.db.vehicleStatusEvent.findMany({
+            where: { vehicleId: id },
+            orderBy: { createdAt: "desc" },
+            select: { id: true, fromStatus: true, toStatus: true, note: true, createdAt: true },
+          })
+        : Promise.resolve<VehicleStatusEventView[]>([]),
+      loadReconRows
+        ? ctx.db.vehicleReconItem.findMany({ where: { vehicleId: id }, orderBy: { createdAt: "asc" } })
+        : Promise.resolve<VehicleReconItem[] | undefined>(undefined),
+      loadExpenseRows
+        ? ctx.db.expense.findMany({ where: { vehicleId: id }, orderBy: { incurredOn: "desc" } })
+        : Promise.resolve<Expense[] | undefined>(undefined),
+      loadReconCostInputs
+        ? ctx.db.vehicleReconItem.findMany({ where: { vehicleId: id }, select: RECON_COST_SELECT })
+        : Promise.resolve<VehicleEconomicsSource["reconItems"]>([]),
+      loadExpenseCostInputs
+        ? ctx.db.expense.findMany({ where: { vehicleId: id }, select: EXPENSE_COST_SELECT })
+        : Promise.resolve<VehicleEconomicsSource["expenses"]>([]),
+    ]);
+
   if (!vehicle) throw new NotFoundError("That vehicle no longer exists.");
 
-  const [photos, statusEvents, expenses, reconItems] = await Promise.all([
-    ctx.db.vehiclePhoto.findMany({ where: { vehicleId: id }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }),
-    ctx.db.vehicleStatusEvent.findMany({
-      where: { vehicleId: id },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, fromStatus: true, toStatus: true, note: true, createdAt: true },
-    }),
-    actorCan(ctx, "expenses:read")
-      ? ctx.db.expense.findMany({ where: { vehicleId: id }, orderBy: { incurredOn: "desc" } })
-      : Promise.resolve(undefined),
-    actorCan(ctx, "recon:write")
-      ? ctx.db.vehicleReconItem.findMany({ where: { vehicleId: id }, orderBy: { createdAt: "asc" } })
-      : Promise.resolve(undefined),
-  ]);
+  // `_count` is a read artifact for the badges, not part of the vehicle payload.
+  const { _count, ...vehicleRow } = vehicle;
+
+  const view = buildVehicleView(ctx, {
+    ...vehicleRow,
+    reconItems: reconRows ?? reconCostInputs,
+    expenses: expenseRows ?? expenseCostInputs,
+  });
 
   return {
-    vehicle: buildVehicleView(ctx, vehicle),
+    vehicle: loadCostInputs ? view : withholdCostInputDerivedFields(view),
     photos,
     statusEvents,
-    ...(expenses ? { expenses } : {}),
-    ...(reconItems ? { reconItems } : {}),
-    publiclyVisible: isPubliclyVisible(vehicle.status),
+    ...(expenseRows ? { expenses: expenseRows } : {}),
+    ...(reconRows ? { reconItems: reconRows } : {}),
+    counts: {
+      photos: _count.photos,
+      ...(actorCan(ctx, "recon:write") ? { reconItems: _count.reconItems } : {}),
+      ...(actorCan(ctx, "expenses:read") ? { expenses: _count.expenses } : {}),
+    },
+    publiclyVisible: isPubliclyVisible(vehicleRow.status),
   };
 }
 

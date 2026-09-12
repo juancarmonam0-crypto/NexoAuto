@@ -6,7 +6,7 @@ import { FieldList } from "@/app/_components/FieldList";
 import { StatusBadge } from "@/app/_components/StatusBadge";
 import { hasCapability } from "@/lib/auth/roles";
 import { formatBasisPoints, formatCents } from "@/lib/money";
-import { getVehicleDetail, listInventory } from "@/lib/operations/inventory";
+import { getVehicleDetail, listInventoryOptions } from "@/lib/operations/inventory";
 import { listLeads } from "@/lib/operations/leads";
 import { getLiveDealForVehicle } from "@/lib/operations/sales";
 import { isMissingSchemaError } from "@/lib/operations";
@@ -66,7 +66,11 @@ export default async function DealDeskPage({
   const params = await searchParams;
   const vehicleId = params.vehicleId;
 
-  const { items: vehicles } = await listInventory(ctx, { limit: 100 });
+  // LIGHTWEIGHT projection: the Deal Desk's vehicle selector needs a label, a
+  // stock number, an asking price and a status — not every vehicle's economics
+  // dependencies. The SELECTED vehicle is still read in full, but only when one
+  // is actually selected (below).
+  const { items: vehicles } = await listInventoryOptions(ctx, { limit: 200 });
   const { items: leads } = await listLeads(ctx, { limit: 100, openOnly: true });
 
   // Both reads are guarded by the presence of an id: `getVehicleDetail` asserts

@@ -3,7 +3,7 @@ import { ActionForm } from "@/app/_components/ActionForm";
 import { cancelDealAction, completeVehicleSaleAction } from "@/app/actions/sales";
 import { hasCapability } from "@/lib/auth/roles";
 import { formatBasisPoints, formatCents } from "@/lib/money";
-import { FINANCE_TYPES, getLiveDealForVehicle, type DealTermsView } from "@/lib/operations/sales";
+import { FINANCE_TYPES, getLiveDealsForVehicles, type DealTermsView } from "@/lib/operations/sales";
 import { isMissingSchemaError } from "@/lib/operations";
 import { listInventory } from "@/lib/operations/inventory";
 import { CONTACT_METHODS, listLeads } from "@/lib/operations/leads";
@@ -75,16 +75,15 @@ export default async function SalesPage() {
   let dealTermsAvailable = true;
   let dealByVehicle = new Map<string, DealTermsView | null>();
   try {
-    // One contract read per vehicle. Phase 9B widened it: it now returns the
-    // recorded payment structure (rate, term, payment, finance charge) as well
-    // as the id and status, so a completed sale shows the terms it was written on.
-    dealByVehicle = new Map(
-      await Promise.all(
-        [...completed, ...onTheLot].map(
-          async (vehicle) => [vehicle.id, await getLiveDealForVehicle(ctx, vehicle.id)] as const,
-        ),
-      ),
+    // ONE query for every vehicle on the page. This used to be `getLiveDealForVehicle`
+    // inside a map — an N+1 that grew with inventory (100 cars meant 100 round
+    // trips). The batch read returns the same DealTermsView objects through the
+    // same mapping, so nothing about the deal semantics changes.
+    const deals = await getLiveDealsForVehicles(
+      ctx,
+      [...completed, ...onTheLot].map((vehicle) => vehicle.id),
     );
+    dealByVehicle = new Map(deals.map((deal) => [deal.vehicleId, deal]));
   } catch (error) {
     if (!isMissingSchemaError(error)) throw error;
     dealTermsAvailable = false;

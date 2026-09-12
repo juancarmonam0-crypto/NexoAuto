@@ -31,6 +31,7 @@ import {
   TITLE_STATUSES,
   getVehicleDetail,
   getLiveDealForVehicle,
+  type VehicleDetailSection,
 } from "@/lib/operations";
 import { pageOperationContext } from "@/lib/operations/runtime";
 import { allowedTransitions, STATUS_LABELS } from "@/lib/vehicle-status";
@@ -79,6 +80,31 @@ const TAB_KEYS = [
 ] as const;
 
 type VehicleTab = (typeof TAB_KEYS)[number];
+
+/**
+ * WHICH READS EACH TAB ACTUALLY RENDERS.
+ *
+ * The tab is the query plan: the URL decides the section, the section decides
+ * what the server loads, and nothing else is fetched. `overview` and `documents`
+ * render no relation data at all, so they ask for nothing beyond the vehicle row
+ * and its badge counts; the full recon and expense rows, the gallery and the
+ * lifecycle events are each read only by the one tab that displays them.
+ *
+ * `economics` is the one entry that is not a row list: it is the narrow recon
+ * estimate/actual and expense amount inputs the economics engine needs to compute
+ * a landed cost. The tab badges never need rows — the operation counts them in
+ * the vehicle statement.
+ */
+const SECTIONS_BY_TAB: Record<VehicleTab, readonly VehicleDetailSection[]> = {
+  overview: [],
+  economics: ["economics"],
+  recon: ["recon"],
+  expenses: ["expenses"],
+  photos: ["photos"],
+  deal: [],
+  documents: [],
+  history: ["history"],
+};
 
 const CARD = "rounded-xl border border-slate-200 bg-white p-5 shadow-xs";
 const SECTION_LABEL = "font-mono text-[11px] font-bold uppercase tracking-widest text-orange-700";
@@ -154,7 +180,18 @@ export default async function VehiclePage({ params, searchParams }: PageProps) {
   const { vehicleId } = await params;
 
   const ctx = await pageOperationContext("inventory:read");
-  const detail = await getVehicleDetail(ctx, vehicleId);
+
+  // The tab is resolved BEFORE the read, because it decides the read.
+  const requestedTab = (await searchParams).tab;
+  const tab: VehicleTab = TAB_KEYS.includes(requestedTab as VehicleTab)
+    ? (requestedTab as VehicleTab)
+    : "overview";
+
+  // Only the active tab's sections are loaded. A section the role may not see is
+  // not even queried, and a section this tab does not render is left absent, so
+  // the page falls back to its existing empty state instead of a value nobody
+  // read.
+  const detail = await getVehicleDetail(ctx, vehicleId, { sections: SECTIONS_BY_TAB[tab] });
   const vehicle = detail.vehicle;
 
   // Rendering gates only. The server re-checks every capability on every action;
@@ -167,24 +204,23 @@ export default async function VehiclePage({ params, searchParams }: PageProps) {
   const canWriteDeals = hasCapability(ctx.actor.role, "deals:write");
   // `getLiveDealForVehicle` asserts `deals:read`, which RECON does not hold, so the
   // read is gated here instead of turning the page into an error for that role.
+  // It is also read ONLY for the tab that renders it: no other tab has a use for
+  // the live deal.
   const canReadDeals = hasCapability(ctx.actor.role, "deals:read");
-
-  const requestedTab = (await searchParams).tab;
-  const tab: VehicleTab = TAB_KEYS.includes(requestedTab as VehicleTab)
-    ? (requestedTab as VehicleTab)
-    : "overview";
-
-  const deal = canReadDeals ? await getLiveDealForVehicle(ctx, vehicleId) : null;
+  const deal = tab === "deal" && canReadDeals ? await getLiveDealForVehicle(ctx, vehicleId) : null;
 
   const title = `${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ` ${vehicle.trim}` : ""}`;
   const transitions = allowedTransitions(vehicle.status);
 
+  // Badge counts come from the operation's `_count`, so a tab strip never costs
+  // a row load — and a count a role may not see is simply absent, exactly as the
+  // rows are.
   const tabs: readonly DetailTab[] = [
     { key: "overview", label: "Overview" },
     { key: "economics", label: "Economics" },
-    { key: "recon", label: "Recon", count: detail.reconItems?.length },
-    { key: "expenses", label: "Expenses", count: detail.expenses?.length },
-    { key: "photos", label: "Photos", count: detail.photos.length },
+    { key: "recon", label: "Recon", count: detail.counts.reconItems },
+    { key: "expenses", label: "Expenses", count: detail.counts.expenses },
+    { key: "photos", label: "Photos", count: detail.counts.photos },
     { key: "deal", label: "Deal" },
     { key: "documents", label: "Documents" },
     { key: "history", label: "History" },

@@ -764,6 +764,11 @@ export async function liveDealForVehicle(
  */
 export interface DealTermsView {
   dealId: string;
+  /**
+   * The vehicle this deal belongs to. Carried so a BATCH read can be keyed by
+   * vehicle without a second lookup (the Phase-perf fix for the /sales N+1).
+   */
+  vehicleId: string;
   status: DealStatus;
   customerId: string;
   customerName: string;
@@ -829,8 +834,22 @@ export async function getLiveDealForVehicle(
   });
   if (!deal) return null;
 
+  return toDealTermsView(deal);
+}
+
+/** The row shape both deal reads load. */
+type DealRowWithCustomer = Prisma.DealGetPayload<{
+  include: { customer: { select: { firstName: true; lastName: true } } };
+}>;
+
+/**
+ * The ONE row -> view mapping, shared by the single and the batch read so the two
+ * can never disagree about what a deal's terms are.
+ */
+function toDealTermsView(deal: DealRowWithCustomer): DealTermsView {
   return {
     dealId: deal.id,
+    vehicleId: deal.vehicleId,
     status: deal.status,
     customerId: deal.customerId,
     customerName: `${deal.customer.firstName} ${deal.customer.lastName ?? ""}`.trim(),
@@ -873,4 +892,53 @@ export async function getLiveDealForVehicle(
     notes: deal.notes,
     createdAtIso: deal.createdAt.toISOString(),
   };
+}
+
+/** Upper bound on one batch deal read, so a caller cannot ask for the world. */
+export const MAX_BATCH_DEAL_VEHICLES = 200;
+
+/**
+ * The LIVE deals for MANY vehicles in ONE query.
+ *
+ * WHY THIS EXISTS (performance hardening)
+ * The SALES workspace used to call `getLiveDealForVehicle()` once per vehicle,
+ * which is a textbook N+1: a 100-car inventory meant 100 round trips to render
+ * one page. This reads them all with a single bounded `findMany` and returns the
+ * SAME `DealTermsView` objects, through the SAME mapping, so nothing about the
+ * deal semantics changes — only the number of queries.
+ *
+ * `deals_one_live_per_vehicle` (a partial unique index) guarantees at most one
+ * live deal per vehicle; should history ever hold more than one non-dead row for
+ * a vehicle, the newest wins, which is exactly what the single-vehicle read
+ * returns too.
+ *
+ * Capability: `deals:read`.
+ */
+export async function getLiveDealsForVehicles(
+  ctx: OperationContext,
+  vehicleIds: readonly string[],
+): Promise<DealTermsView[]> {
+  assertCapability(ctx, "deals:read");
+
+  const unique = [
+    ...new Set(
+      vehicleIds
+        .map((id) => recordIdSchema.safeParse(id))
+        .filter((parsed) => parsed.success)
+        .map((parsed) => parsed.data),
+    ),
+  ].slice(0, MAX_BATCH_DEAL_VEHICLES);
+  if (unique.length === 0) return [];
+
+  const deals = await ctx.db.deal.findMany({
+    where: { vehicleId: { in: unique }, status: { notIn: ["CANCELLED", "LOST"] } },
+    include: { customer: { select: { firstName: true, lastName: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const byVehicle = new Map<string, DealTermsView>();
+  for (const deal of deals) {
+    if (!byVehicle.has(deal.vehicleId)) byVehicle.set(deal.vehicleId, toDealTermsView(deal));
+  }
+  return [...byVehicle.values()];
 }

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ActionForm } from "@/app/_components/ActionForm";
 import { publishVehicleAction, unpublishVehicleAction } from "@/app/actions/cars";
 import { hasCapability } from "@/lib/auth/roles";
-import { listInventory } from "@/lib/operations/inventory";
+import { countInventory, listInventory } from "@/lib/operations/inventory";
 import { pageOperationContext } from "@/lib/operations/runtime";
 import { StatusBadge } from "@/app/_components/StatusBadge";
 import { MoneyMetric } from "@/app/_components/MoneyMetric";
@@ -43,12 +43,17 @@ function DaysMetric({ days }: { days: number | null }) {
 export default async function CarsPage() {
   const ctx = await pageOperationContext("inventory:read");
 
-  const [activeRes, allRes] = await Promise.all([
-    listInventory(ctx, { listingStatus: "ACTIVE", limit: 50 }),
+  // ONE heavy inventory read (with its economics load) plus a cheap COUNT for the
+  // published badge. This used to run `listInventory` TWICE, loading every
+  // vehicle's economics dependencies for a number; and deriving the count from a
+  // `limit`ed list would silently under-report once inventory passed that limit,
+  // so the database counts it instead.
+  const [inventory, activeCount] = await Promise.all([
     listInventory(ctx, { limit: 100 }),
+    countInventory(ctx, { listingStatus: "ACTIVE" }),
   ]);
 
-  const vehicles = allRes.items;
+  const vehicles = inventory.items;
   const canPrice = hasCapability(ctx.actor.role, "pricing:write");
   const canSeeFinance = hasCapability(ctx.actor.role, "finance:read");
   const canSourcing = hasCapability(ctx.actor.role, "sourcing:write");
@@ -73,7 +78,7 @@ export default async function CarsPage() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 font-mono text-xs bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-slate-700 shadow-xs">
             <span className="text-slate-400">Published Active:</span>
-            <span className="font-bold text-slate-900">{activeRes.total} vehicles</span>
+            <span className="font-bold text-slate-900">{activeCount} vehicles</span>
           </div>
 
           {canSourcing && (
