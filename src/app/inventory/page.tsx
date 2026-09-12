@@ -59,6 +59,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
                 <input
                   type="search"
                   name="q"
+                  aria-label="Search published inventory"
                   defaultValue={search ?? ""}
                   placeholder="Search make, model, VIN..."
                   className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"

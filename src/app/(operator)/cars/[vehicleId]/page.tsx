@@ -13,7 +13,7 @@ import {
   uploadVehiclePhotoAction,
 } from "@/app/actions/cars";
 import { hasCapability } from "@/lib/auth/roles";
-import { formatBasisPoints, formatCents } from "@/lib/money";
+import { centsToDecimalString, formatBasisPoints, formatCents } from "@/lib/money";
 import { EXPENSE_CATEGORIES, getVehicleDetail } from "@/lib/operations";
 import { pageOperationContext } from "@/lib/operations/runtime";
 import { allowedTransitions, STATUS_LABELS } from "@/lib/vehicle-status";
@@ -179,12 +179,14 @@ export default async function VehiclePage({ params }: PageProps) {
                     <input
                       type="file"
                       name="file"
+                      aria-label="Photo image file"
                       accept="image/jpeg,image/png,image/webp"
                       required
                       className="text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
                     />
                     <input
                       name="alt"
+                      aria-label="Photo alt description"
                       placeholder="Alt description text"
                       className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-900 placeholder:text-slate-400"
                     />
@@ -252,10 +254,10 @@ export default async function VehiclePage({ params }: PageProps) {
                 <input type="hidden" name="vehicleId" value={vehicle.id} />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                    <label htmlFor="toStatus" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                       Target Status
                     </label>
-                    <select
+                    <select id="toStatus"
                       name="toStatus"
                       required
                       defaultValue=""
@@ -273,10 +275,10 @@ export default async function VehiclePage({ params }: PageProps) {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                    <label htmlFor="note" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                       Status Note
                     </label>
-                    <input
+                    <input id="note"
                       name="note"
                       placeholder="e.g. Completed recon inspection"
                       className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400"
@@ -305,10 +307,10 @@ export default async function VehiclePage({ params }: PageProps) {
                 <input type="hidden" name="vehicleId" value={vehicle.id} />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                    <label htmlFor="mileage" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                       Mileage
                     </label>
-                    <input
+                    <input id="mileage"
                       name="mileage"
                       defaultValue={vehicle.mileage}
                       inputMode="numeric"
@@ -317,10 +319,10 @@ export default async function VehiclePage({ params }: PageProps) {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                    <label htmlFor="location" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                       Location
                     </label>
-                    <input
+                    <input id="location"
                       name="location"
                       defaultValue={vehicle.location ?? ""}
                       className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900"
@@ -328,10 +330,10 @@ export default async function VehiclePage({ params }: PageProps) {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                    <label htmlFor="exteriorColor" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                       Exterior Color
                     </label>
-                    <input
+                    <input id="exteriorColor"
                       name="exteriorColor"
                       defaultValue={vehicle.exteriorColor ?? ""}
                       className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900"
@@ -339,10 +341,10 @@ export default async function VehiclePage({ params }: PageProps) {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                    <label htmlFor="interiorColor" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                       Interior Color
                     </label>
-                    <input
+                    <input id="interiorColor"
                       name="interiorColor"
                       defaultValue={vehicle.interiorColor ?? ""}
                       className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900"
@@ -350,10 +352,10 @@ export default async function VehiclePage({ params }: PageProps) {
                   </div>
 
                   <div className="sm:col-span-2 space-y-1">
-                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                    <label htmlFor="description" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                       Public Description
                     </label>
-                    <textarea
+                    <textarea id="description"
                       name="description"
                       defaultValue={vehicle.description ?? ""}
                       rows={3}
@@ -362,10 +364,10 @@ export default async function VehiclePage({ params }: PageProps) {
                   </div>
 
                   <div className="sm:col-span-2 space-y-1">
-                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                    <label htmlFor="notes" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                       Internal Operator Notes
                     </label>
-                    <textarea
+                    <textarea id="notes"
                       name="notes"
                       defaultValue={vehicle.notes ?? ""}
                       rows={2}
@@ -398,13 +400,13 @@ export default async function VehiclePage({ params }: PageProps) {
                 <input type="hidden" name="vehicleId" value={vehicle.id} />
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                    <label htmlFor="askingPrice" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                       Asking Price ($)
                     </label>
-                    <input
+                    <input id="askingPrice"
                       name="askingPrice"
                       defaultValue={
-                        vehicle.askingPriceCents !== null ? (vehicle.askingPriceCents / 100).toFixed(2) : ""
+                        vehicle.askingPriceCents !== null ? centsToDecimalString(vehicle.askingPriceCents) : ""
                       }
                       inputMode="decimal"
                       className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm font-mono text-slate-900"
@@ -412,14 +414,14 @@ export default async function VehiclePage({ params }: PageProps) {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                    <label htmlFor="targetRetail" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                       Target Retail Price ($)
                     </label>
-                    <input
+                    <input id="targetRetail"
                       name="targetRetail"
                       defaultValue={
                         vehicle.targetRetailPriceCents !== null
-                          ? (vehicle.targetRetailPriceCents / 100).toFixed(2)
+                          ? centsToDecimalString(vehicle.targetRetailPriceCents)
                           : ""
                       }
                       inputMode="decimal"
@@ -428,14 +430,14 @@ export default async function VehiclePage({ params }: PageProps) {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                    <label htmlFor="minimumApproved" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                       Minimum Approved Price ($)
                     </label>
-                    <input
+                    <input id="minimumApproved"
                       name="minimumApproved"
                       defaultValue={
                         vehicle.minimumApprovedCents !== null
-                          ? (vehicle.minimumApprovedCents / 100).toFixed(2)
+                          ? centsToDecimalString(vehicle.minimumApprovedCents)
                           : ""
                       }
                       inputMode="decimal"
@@ -465,8 +467,8 @@ export default async function VehiclePage({ params }: PageProps) {
                 <input type="hidden" name="vehicleId" value={vehicle.id} />
                 <div className="space-y-3 text-xs">
                   <div>
-                    <label className="text-slate-600 font-medium block mb-1">Issue Description</label>
-                    <input
+                    <label htmlFor="issue" className="text-slate-600 font-medium block mb-1">Issue Description</label>
+                    <input id="issue"
                       name="issue"
                       required
                       placeholder="e.g. Replace front brake pads"
@@ -475,8 +477,8 @@ export default async function VehiclePage({ params }: PageProps) {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-slate-600 font-medium block mb-1">Est. Cost ($)</label>
-                      <input
+                      <label htmlFor="estimate" className="text-slate-600 font-medium block mb-1">Est. Cost ($)</label>
+                      <input id="estimate"
                         name="estimate"
                         inputMode="decimal"
                         placeholder="250.00"
@@ -484,8 +486,8 @@ export default async function VehiclePage({ params }: PageProps) {
                       />
                     </div>
                     <div>
-                      <label className="text-slate-600 font-medium block mb-1">Actual Cost ($)</label>
-                      <input
+                      <label htmlFor="actualCost" className="text-slate-600 font-medium block mb-1">Actual Cost ($)</label>
+                      <input id="actualCost"
                         name="actualCost"
                         inputMode="decimal"
                         placeholder="240.00"
@@ -494,8 +496,8 @@ export default async function VehiclePage({ params }: PageProps) {
                     </div>
                   </div>
                   <div>
-                    <label className="text-slate-600 font-medium block mb-1">Status</label>
-                    <select
+                    <label htmlFor="status" className="text-slate-600 font-medium block mb-1">Status</label>
+                    <select id="status"
                       name="status"
                       defaultValue="ESTIMATED"
                       className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-900"
@@ -552,8 +554,8 @@ export default async function VehiclePage({ params }: PageProps) {
                 <div className="space-y-3 text-xs">
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-slate-600 font-medium block mb-1">Category</label>
-                      <select
+                      <label htmlFor="category" className="text-slate-600 font-medium block mb-1">Category</label>
+                      <select id="category"
                         name="category"
                         required
                         defaultValue="PARTS"
@@ -567,8 +569,8 @@ export default async function VehiclePage({ params }: PageProps) {
                       </select>
                     </div>
                     <div>
-                      <label className="text-slate-600 font-medium block mb-1">Amount ($)</label>
-                      <input
+                      <label htmlFor="amount" className="text-slate-600 font-medium block mb-1">Amount ($)</label>
+                      <input id="amount"
                         name="amount"
                         inputMode="decimal"
                         required
@@ -579,16 +581,16 @@ export default async function VehiclePage({ params }: PageProps) {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-slate-600 font-medium block mb-1">Vendor</label>
-                      <input
+                      <label htmlFor="vendor" className="text-slate-600 font-medium block mb-1">Vendor</label>
+                      <input id="vendor"
                         name="vendor"
                         placeholder="AutoZone"
                         className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-900"
                       />
                     </div>
                     <div>
-                      <label className="text-slate-600 font-medium block mb-1">Incurred Date</label>
-                      <input
+                      <label htmlFor="incurredOn" className="text-slate-600 font-medium block mb-1">Incurred Date</label>
+                      <input id="incurredOn"
                         type="date"
                         name="incurredOn"
                         className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-900"

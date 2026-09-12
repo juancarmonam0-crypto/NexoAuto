@@ -63,10 +63,10 @@ export default async function LeadsPage() {
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                <label htmlFor="firstName" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   First Name <span className="text-orange-600">*</span>
                 </label>
-                <input
+                <input id="firstName"
                   name="firstName"
                   required
                   placeholder="e.g. Jane"
@@ -75,10 +75,10 @@ export default async function LeadsPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                <label htmlFor="lastName" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   Last Name
                 </label>
-                <input
+                <input id="lastName"
                   name="lastName"
                   placeholder="e.g. Doe"
                   className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
@@ -86,8 +86,8 @@ export default async function LeadsPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">Phone</label>
-                <input
+                <label htmlFor="phone" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">Phone</label>
+                <input id="phone"
                   name="phone"
                   placeholder="(512) 555-0144"
                   className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm font-mono text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
@@ -95,8 +95,8 @@ export default async function LeadsPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">Email</label>
-                <input
+                <label htmlFor="email" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">Email</label>
+                <input id="email"
                   type="email"
                   name="email"
                   placeholder="customer@example.com"
@@ -105,10 +105,10 @@ export default async function LeadsPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                <label htmlFor="vehicleId" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   Associated Vehicle
                 </label>
-                <select
+                <select id="vehicleId"
                   name="vehicleId"
                   defaultValue=""
                   className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
@@ -123,10 +123,10 @@ export default async function LeadsPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                <label htmlFor="source" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   Lead Source
                 </label>
-                <select
+                <select id="source"
                   name="source"
                   defaultValue="WEBSITE_INQUIRY"
                   className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
@@ -140,10 +140,10 @@ export default async function LeadsPage() {
               </div>
 
               <div className="sm:col-span-2 space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                <label htmlFor="summary" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   Initial Summary / Notes
                 </label>
-                <input
+                <input id="summary"
                   name="summary"
                   placeholder="Interested in test drive, looking for clean title..."
                   className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
@@ -241,6 +241,7 @@ export default async function LeadsPage() {
                         <div className="flex items-center gap-2">
                           <select
                             name="status"
+                            aria-label="Lead status"
                             defaultValue={lead.status}
                             className="w-full px-2 py-1 rounded bg-white border border-slate-300 text-xs text-slate-900"
                           >

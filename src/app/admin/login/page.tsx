@@ -53,10 +53,10 @@ export default async function LoginPage() {
           >
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label htmlFor="email" className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                   Email Address
                 </label>
-                <input
+                <input id="email"
                   type="email"
                   name="email"
                   required
@@ -67,10 +67,10 @@ export default async function LoginPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label htmlFor="password" className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                   Password
                 </label>
-                <input
+                <input id="password"
                   type="password"
                   name="password"
                   required

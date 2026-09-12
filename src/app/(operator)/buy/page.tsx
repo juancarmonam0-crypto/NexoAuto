@@ -63,10 +63,10 @@ export default async function BuyPage() {
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                <label htmlFor="field-1-vin" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   VIN
                 </label>
-                <input
+                <input id="field-1-vin"
                   name="vin"
                   placeholder="17-character VIN"
                   maxLength={17}
@@ -75,10 +75,10 @@ export default async function BuyPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                <label htmlFor="field-2-year" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   Year
                 </label>
-                <input
+                <input id="field-2-year"
                   name="year"
                   type="number"
                   defaultValue={new Date().getFullYear()}
@@ -87,10 +87,10 @@ export default async function BuyPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                <label htmlFor="field-3-make" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   Make
                 </label>
-                <input
+                <input id="field-3-make"
                   name="make"
                   placeholder="e.g. Honda, Toyota"
                   className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
@@ -98,10 +98,10 @@ export default async function BuyPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                <label htmlFor="field-4-model" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   Model
                 </label>
-                <input
+                <input id="field-4-model"
                   name="model"
                   placeholder="e.g. Civic, RAV4"
                   className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
@@ -109,8 +109,8 @@ export default async function BuyPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">Trim</label>
-                <input
+                <label htmlFor="trim" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">Trim</label>
+                <input id="trim"
                   name="trim"
                   placeholder="EX, Sport, etc."
                   className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
@@ -118,10 +118,10 @@ export default async function BuyPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                <label htmlFor="field-6-mileage" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   Mileage
                 </label>
-                <input
+                <input id="field-6-mileage"
                   name="mileage"
                   inputMode="numeric"
                   placeholder="45000"
@@ -130,10 +130,10 @@ export default async function BuyPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                <label htmlFor="askingPrice" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   Asking Price ($) <span className="text-orange-600">*</span>
                 </label>
-                <input
+                <input id="askingPrice"
                   name="askingPrice"
                   inputMode="decimal"
                   required
@@ -143,10 +143,10 @@ export default async function BuyPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                <label htmlFor="estimatedRetail" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   Estimated Retail ($) <span className="text-orange-600">*</span>
                 </label>
-                <input
+                <input id="estimatedRetail"
                   name="estimatedRetail"
                   inputMode="decimal"
                   required
@@ -156,10 +156,10 @@ export default async function BuyPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                <label htmlFor="estimatedRecon" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   Est. Recon Cost ($)
                 </label>
-                <input
+                <input id="estimatedRecon"
                   name="estimatedRecon"
                   inputMode="decimal"
                   placeholder="800.00"
@@ -168,10 +168,10 @@ export default async function BuyPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                <label htmlFor="transport" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   Est. Transport ($)
                 </label>
-                <input
+                <input id="transport"
                   name="transport"
                   inputMode="decimal"
                   placeholder="300.00"
@@ -180,10 +180,10 @@ export default async function BuyPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                <label htmlFor="source" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   Sourcing Channel
                 </label>
-                <select
+                <select id="source"
                   name="source"
                   defaultValue="MANUAL_ENTRY"
                   className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
@@ -197,10 +197,10 @@ export default async function BuyPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                <label htmlFor="notes" className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   Notes
                 </label>
-                <input
+                <input id="notes"
                   name="notes"
                   placeholder="Clean title, auction lot #42..."
                   className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
@@ -317,6 +317,7 @@ export default async function BuyPage() {
                         <div className="flex items-center gap-2">
                           <select
                             name="status"
+                            aria-label="Sourcing decision"
                             defaultValue={opp.status}
                             className="px-2 py-1 rounded bg-white border border-slate-300 text-xs text-slate-900"
                           >
@@ -338,18 +339,65 @@ export default async function BuyPage() {
                           buttonSize="sm"
                         >
                           <input type="hidden" name="candidateId" value={opp.id} />
-                          <input type="hidden" name="vin" value={opp.vin ?? "1HGCR2F8XNA000000"} />
-                          <input type="hidden" name="year" value={opp.year ?? new Date().getFullYear()} />
-                          <input type="hidden" name="make" value={opp.make ?? "Unknown"} />
-                          <input type="hidden" name="model" value={opp.model ?? "Unknown"} />
-                          <input type="hidden" name="mileage" value={opp.mileage ?? 0} />
-                          <input
-                            name="purchasePrice"
-                            inputMode="decimal"
-                            required
-                            placeholder="Final Price ($)"
-                            className="px-2 py-1 rounded bg-white border border-slate-300 text-xs font-mono text-slate-900 w-28"
-                          />
+                          {/*
+                            These are REAL vehicle fields, so they are visible and
+                            required rather than hidden with invented fallbacks: a
+                            placeholder VIN or "Unknown" make would be silently
+                            written into inventory as fact. Values already known
+                            from the opportunity are pre-filled for confirmation.
+                          */}
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            <input
+                              name="vin"
+                              aria-label="VIN"
+                              required
+                              defaultValue={opp.vin ?? ""}
+                              placeholder="VIN"
+                              className="px-2 py-1 rounded bg-white border border-slate-300 text-xs font-mono text-slate-900"
+                            />
+                            <input
+                              name="year"
+                              aria-label="Year"
+                              required
+                              inputMode="numeric"
+                              defaultValue={opp.year ?? ""}
+                              placeholder="Year"
+                              className="px-2 py-1 rounded bg-white border border-slate-300 text-xs font-mono text-slate-900"
+                            />
+                            <input
+                              name="make"
+                              aria-label="Make"
+                              required
+                              defaultValue={opp.make ?? ""}
+                              placeholder="Make"
+                              className="px-2 py-1 rounded bg-white border border-slate-300 text-xs text-slate-900"
+                            />
+                            <input
+                              name="model"
+                              aria-label="Model"
+                              required
+                              defaultValue={opp.model ?? ""}
+                              placeholder="Model"
+                              className="px-2 py-1 rounded bg-white border border-slate-300 text-xs text-slate-900"
+                            />
+                            <input
+                              name="mileage"
+                              aria-label="Mileage"
+                              required
+                              inputMode="numeric"
+                              defaultValue={opp.mileage ?? ""}
+                              placeholder="Mileage"
+                              className="px-2 py-1 rounded bg-white border border-slate-300 text-xs font-mono text-slate-900"
+                            />
+                            <input
+                              name="purchasePrice"
+                              aria-label="Purchase price in dollars"
+                              inputMode="decimal"
+                              required
+                              placeholder="Final price ($)"
+                              className="px-2 py-1 rounded bg-white border border-slate-300 text-xs font-mono text-slate-900"
+                            />
+                          </div>
                         </ActionForm>
                       )}
                     </div>
