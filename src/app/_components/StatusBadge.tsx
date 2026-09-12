@@ -1,10 +1,19 @@
 interface StatusBadgeProps {
+  /**
+   * The canonical status token ("AVAILABLE", "RESERVED", …). Always English:
+   * it is a value, and the variant is derived from it.
+   */
   status: string;
+  /**
+   * Localised display text. When omitted the token itself is shown, which is
+   * what the operator surfaces (English-only) rely on.
+   */
+  label?: string;
   variant?: "neutral" | "info" | "warning" | "success" | "danger" | "orange";
   size?: "sm" | "md";
 }
 
-export function StatusBadge({ status, variant, size = "sm" }: StatusBadgeProps) {
+export function StatusBadge({ status, label, variant, size = "sm" }: StatusBadgeProps) {
   const normalized = status.toUpperCase();
 
   let computedVariant = variant;
@@ -13,6 +22,10 @@ export function StatusBadge({ status, variant, size = "sm" }: StatusBadgeProps) 
       computedVariant = "success";
     } else if (["RESERVED", "WATCH", "IN_PROGRESS", "CONTACTED", "APPOINTMENT"].includes(normalized)) {
       computedVariant = "warning";
+    } else if (["DEMO"].includes(normalized)) {
+      // Honesty marker for vehicles that are not real inventory: visible, but
+      // deliberately not styled like a state the customer should act on.
+      computedVariant = "orange";
     } else if (["SOLD", "PASS", "LOST", "CANCELLED", "REJECTED"].includes(normalized)) {
       computedVariant = "neutral";
     } else if (["RECON", "TRANSIT", "INSPECTING"].includes(normalized)) {
@@ -40,7 +53,7 @@ export function StatusBadge({ status, variant, size = "sm" }: StatusBadgeProps) 
     <span
       className={`inline-flex items-center justify-center rounded-md font-mono border tracking-tight ${styles[computedVariant]} ${sizes[size]}`}
     >
-      {status}
+      {label ?? status}
     </span>
   );
 }

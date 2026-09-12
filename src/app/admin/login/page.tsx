@@ -3,7 +3,8 @@ import { ActionForm } from "@/app/_components/ActionForm";
 import { loginAction } from "@/app/actions/auth";
 import { getCurrentUser } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
-import { Car, Lock, ArrowLeft } from "lucide-react";
+import { NexoMark } from "@/app/_components/brand";
+import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -14,36 +15,32 @@ export default async function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans selection:bg-orange-500 selection:text-white">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md space-y-4">
+    <div className="flex min-h-screen flex-col justify-center bg-slate-50 px-4 py-12 font-sans selection:bg-orange-500 selection:text-white sm:px-6 lg:px-8">
+      <div className="space-y-4 sm:mx-auto sm:w-full sm:max-w-md">
         {/* Brand & Back link */}
         <div className="flex items-center justify-between">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 transition-colors hover:text-slate-900"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Public Catalog</span>
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Public catalog</span>
           </Link>
 
-          <span className="text-[11px] font-mono text-slate-400">Nexo Operator</span>
+          <span className="font-mono text-[11px] text-slate-400">Nexo Operator</span>
         </div>
 
-        <div className="text-center space-y-1">
-          <div className="w-10 h-10 rounded-xl bg-slate-900 text-white mx-auto flex items-center justify-center">
-            <Car className="w-5 h-5 text-orange-500" />
-          </div>
-          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900">
-            Operator Access
-          </h1>
+        <div className="space-y-2 text-center">
+          <NexoMark className="mx-auto h-10 w-10 rounded-xl" />
+          <h1 className="text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">Operator access</h1>
           <p className="text-xs text-slate-500">
-            Sign in with authorized dealer credentials to access operator tools.
+            Sign in with authorized dealer credentials to reach the operator tools.
           </p>
         </div>
       </div>
 
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-6 shadow-xs rounded-xl border border-slate-200 sm:px-10">
+        <div className="rounded-xl border border-slate-200 bg-white px-6 py-8 shadow-xs sm:px-10">
           <ActionForm
             action={loginAction}
             submitLabel="Sign In to Operator Tools"

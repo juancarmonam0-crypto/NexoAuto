@@ -1,216 +1,230 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { formatCents } from "@/lib/money";
-import { PUBLIC_INVENTORY_PAGE_SIZE, listPublicInventory } from "@/lib/public-catalog";
+import { PUBLIC_INVENTORY_PAGE_SIZE, getPublicDealerInfo, listPublicInventory } from "@/lib/public-catalog";
+import { getPublicStrings } from "@/lib/i18n";
 import { PublicNav } from "@/app/_components/PublicNav";
 import { PublicFooter } from "@/app/_components/PublicFooter";
-import { StatusBadge } from "@/app/_components/StatusBadge";
-import { Search, Car, ArrowRight, ArrowLeft, ChevronRight } from "lucide-react";
+import { VehicleCard } from "@/app/_components/PublicVehicleCard";
+import { ArrowLeft, ArrowRight, Car, ChevronRight, Phone, Search } from "lucide-react";
+
+/**
+ * Public inventory catalog.
+ *
+ * Same design system and the same `VehicleCard` as the landing preview, so the
+ * click-through from the homepage is continuous. The only difference is density:
+ * this is the "see everything" surface, so it carries the search field and
+ * pagination rather than marketing sections.
+ *
+ * Bilingual, and driven purely by the dictionary: the search placeholder, the
+ * result counts, the empty states and the pagination controls are all
+ * translated. The search input itself sends whatever the customer typed
+ * straight to the database, so a Spanish speaker can search by make or model
+ * exactly as they would in English.
+ */
+
+interface PageProps {
+  searchParams: Promise<{ q?: string; page?: string; lang?: string }>;
+}
+
+export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  const params = await searchParams;
+  const s = await getPublicStrings({ searchParam: params.lang ?? null });
+  return {
+    title: s.t("meta.inventory.title"),
+    description: s.t("meta.inventory.description"),
+    alternates: { canonical: "/inventory" },
+  };
+}
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Inventory · Nexo Auto" };
-
-interface PageProps {
-  searchParams: Promise<{ q?: string; page?: string }>;
-}
-
 export default async function InventoryPage({ searchParams }: PageProps) {
   const params = await searchParams;
+  const s = await getPublicStrings({ searchParam: params.lang ?? null });
+
   const search = typeof params.q === "string" && params.q.trim() !== "" ? params.q.trim().slice(0, 80) : undefined;
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
   const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
 
-  const vehicles = await listPublicInventory({
-    search,
-    limit: PUBLIC_INVENTORY_PAGE_SIZE,
-    offset: (page - 1) * PUBLIC_INVENTORY_PAGE_SIZE,
-  });
+  const [vehicles, dealer] = await Promise.all([
+    listPublicInventory({
+      search,
+      limit: PUBLIC_INVENTORY_PAGE_SIZE,
+      offset: (page - 1) * PUBLIC_INVENTORY_PAGE_SIZE,
+    }),
+    getPublicDealerInfo(),
+  ]);
+
+  const name = dealer?.name?.trim() || s.t("meta.siteName");
+  const phone = dealer?.phone?.trim() || null;
+  const hasResults = vehicles.length > 0;
+  const hasNextPage = vehicles.length === PUBLIC_INVENTORY_PAGE_SIZE;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-orange-500 selection:text-white">
-      <PublicNav />
+    <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
+      <PublicNav dealerInfo={dealer} language={s.language} />
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        {/* Breadcrumb & Header */}
-        <div className="mb-6 space-y-3">
-          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-            <Link href="/" className="hover:text-orange-600 transition-colors">
-              Home
-            </Link>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-800">Inventory</span>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
+        {/* Breadcrumb */}
+        <nav aria-label="Breadcrumb" className="mb-5">
+          <ol className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
+            <li>
+              <Link href="/" className="transition-colors hover:text-orange-700">
+                {s.t("inventory.breadcrumbHome")}
+              </Link>
+            </li>
+            <li aria-hidden="true">
+              <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+            </li>
+            <li className="font-semibold text-slate-800">{s.t("inventory.breadcrumbCurrent")}</li>
+          </ol>
+        </nav>
+
+        {/* Page header + search */}
+        <div className="mb-7 flex flex-col gap-5 border-b border-slate-200 pb-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+              {s.t("inventory.title")}
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">{s.tc("inventory.intro", { name })}</p>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
-                Vehicle Inventory
-              </h1>
-              <p className="text-slate-500 text-xs mt-0.5">
-                Current selection of vehicles available for review.
-              </p>
-            </div>
-
-            {/* Compact Search Form */}
-            <form method="get" action="/inventory" className="flex items-center gap-2">
-              <div className="relative w-full sm:w-64">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <form method="get" action="/inventory" className="w-full lg:w-auto">
+            {/* The language travels with the search so results stay in Spanish. */}
+            {params.lang && <input type="hidden" name="lang" value={params.lang} />}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative w-full sm:w-72">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                  aria-hidden="true"
+                />
+                <label htmlFor="inventory-search" className="sr-only">
+                  {s.t("inventory.searchLabel")}
+                </label>
                 <input
+                  id="inventory-search"
                   type="search"
                   name="q"
-                  aria-label="Search published inventory"
                   defaultValue={search ?? ""}
-                  placeholder="Search make, model, VIN..."
-                  className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                  placeholder={s.t("inventory.searchPlaceholder")}
+                  className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1"
                 />
               </div>
               <button
                 type="submit"
-                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs transition-colors cursor-pointer shrink-0"
+                className="inline-flex h-11 shrink-0 items-center justify-center rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
               >
-                Search
+                {s.t("inventory.searchAction")}
               </button>
-            </form>
-          </div>
+            </div>
+          </form>
         </div>
 
-        {/* Results Container */}
-        {vehicles.length === 0 ? (
-          <div className="p-8 sm:p-12 text-center rounded-xl bg-white border border-slate-200 space-y-3 my-6 shadow-xs">
-            <div className="w-12 h-12 rounded-full bg-slate-100 mx-auto flex items-center justify-center text-slate-400">
-              <Car className="w-6 h-6 text-slate-500" />
-            </div>
-            <h3 className="text-base font-bold text-slate-900">
-              {search ? `No vehicles matching "${search}"` : "No vehicles currently listed"}
-            </h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              {search
-                ? "Try searching for a different make or model, or view all inventory."
-                : "Vehicles are added as they become ready for sale. Check back soon."}
+        {/* Results */}
+        {hasResults ? (
+          <>
+            <p className="mb-4 text-xs text-slate-500" role="status">
+              {search ? (
+                s.tc("inventory.resultsMatching", { query: `“${search}”` })
+              ) : (
+                s.tn("inventory.resultsCount", vehicles.length)
+              )}
             </p>
-            {search && (
-              <div className="pt-2">
+
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {vehicles.map((vehicle) => (
+                <VehicleCard key={vehicle.id} vehicle={vehicle} language={s.language} />
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xs sm:p-12">
+            <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+              <Car className="h-6 w-6" aria-hidden="true" />
+            </span>
+            <h2 className="mt-4 text-lg font-bold tracking-tight text-slate-900">
+              {search ? s.tc("inventory.empty.searchTitle", { query: `“${search}”` }) : s.t("inventory.empty.title")}
+            </h2>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-600">
+              {s.t(search ? "inventory.empty.searchBody" : "inventory.empty.body")}
+            </p>
+
+            <div className="mt-6 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-center">
+              {search ? (
                 <Link
                   href="/inventory"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
+                  className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
                 >
-                  Clear Search
+                  <span>{s.t("inventory.empty.clearSearch")}</span>
                 </Link>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {vehicles.map((vehicle) => {
-              const title = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
-
-              return (
-                <div
-                  key={vehicle.id}
-                  className="group rounded-xl bg-white border border-slate-200 hover:border-slate-300 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+              ) : (
+                <Link
+                  href="/"
+                  className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
                 >
-                  <div>
-                    {/* Photo */}
-                    <div className="relative aspect-16/10 bg-slate-100 overflow-hidden flex items-center justify-center border-b border-slate-100">
-                      {vehicle.primaryPhotoUrl ? (
-                        /* eslint-disable-next-line @next/next/no-img-element */
-                        <img
-                          src={vehicle.primaryPhotoUrl}
-                          alt={title}
-                          className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center">
-                          <Car className="w-8 h-8 text-slate-300 mb-1" />
-                          <span className="text-xs font-semibold text-slate-500">{title}</span>
-                        </div>
-                      )}
-                      <div className="absolute top-2.5 right-2.5">
-                        <StatusBadge
-                          status={vehicle.availability === "RESERVED" ? "RESERVED" : "AVAILABLE"}
-                          size="sm"
-                        />
-                      </div>
-                    </div>
+                  <span>{s.t("inventory.empty.home")}</span>
+                </Link>
+              )}
 
-                    {/* Specs */}
-                    <div className="p-4 space-y-2">
-                      <div>
-                        <h3 className="text-base font-bold text-slate-900 group-hover:text-orange-600 transition-colors">
-                          {title}
-                          {vehicle.trim ? ` ${vehicle.trim}` : ""}
-                        </h3>
-                        <div className="flex items-center gap-2 text-xs text-slate-500 font-mono mt-0.5">
-                          <span>{vehicle.mileage.toLocaleString("en-US")} mi</span>
-                          <span>•</span>
-                          <span>{vehicle.exteriorColor || "Exterior N/A"}</span>
-                          <span>•</span>
-                          <span>Stock #{vehicle.stockNumber}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Price & Action */}
-                  <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] text-slate-500 font-mono uppercase block">Price</span>
-                      <span className="text-base font-extrabold font-mono text-slate-900">
-                        {formatCents(vehicle.askingPriceCents)}
-                      </span>
-                    </div>
-                    <Link
-                      href={`/inventory/${vehicle.id}`}
-                      className="px-3.5 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1"
-                    >
-                      <span>View Vehicle</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
+              {phone && (
+                <a
+                  href={`tel:${phone.replace(/[^+\d]/g, "")}`}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50"
+                >
+                  <Phone className="h-4 w-4 text-orange-600" aria-hidden="true" />
+                  <span>{s.t("inventory.empty.askAboutUpcoming")}</span>
+                </a>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Pagination controls */}
-        <div className="flex items-center justify-between pt-4 border-t border-slate-200 text-xs">
-          <div>
-            {page > 1 ? (
-              <Link
-                href={`/inventory?${new URLSearchParams({
-                  ...(search ? { q: search } : {}),
-                  page: String(page - 1),
-                })}`}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 font-medium text-slate-700 transition-colors"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Previous</span>
-              </Link>
-            ) : null}
-          </div>
+        {/* Pagination — only ever shows controls that lead somewhere. */}
+        {(page > 1 || hasNextPage) && (
+          <nav
+            aria-label={s.t("inventory.paginationLabel")}
+            className="mt-10 flex items-center justify-between gap-4 border-t border-slate-200 pt-6"
+          >
+            <div className="flex-1">
+              {page > 1 && (
+                <Link
+                  href={`/inventory?${new URLSearchParams({
+                    ...(search ? { q: search } : {}),
+                    ...(params.lang ? { lang: params.lang } : {}),
+                    page: String(page - 1),
+                  })}`}
+                  rel="prev"
+                  className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                  <span>{s.t("inventory.previous")}</span>
+                </Link>
+              )}
+            </div>
 
-          <span className="font-mono text-slate-500">Page {page}</span>
+            <span className="font-mono text-xs text-slate-500">{s.tc("inventory.page", { page })}</span>
 
-          <div>
-            {vehicles.length === PUBLIC_INVENTORY_PAGE_SIZE ? (
-              <Link
-                href={`/inventory?${new URLSearchParams({
-                  ...(search ? { q: search } : {}),
-                  page: String(page + 1),
-                })}`}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 font-medium text-slate-700 transition-colors"
-              >
-                <span>Next</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            ) : null}
-          </div>
-        </div>
+            <div className="flex flex-1 justify-end">
+              {hasNextPage && (
+                <Link
+                  href={`/inventory?${new URLSearchParams({
+                    ...(search ? { q: search } : {}),
+                    ...(params.lang ? { lang: params.lang } : {}),
+                    page: String(page + 1),
+                  })}`}
+                  rel="next"
+                  className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  <span>{s.t("inventory.next")}</span>
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              )}
+            </div>
+          </nav>
+        )}
       </main>
 
-      <PublicFooter />
+      <PublicFooter dealerInfo={dealer} language={s.language} />
     </div>
   );
 }
