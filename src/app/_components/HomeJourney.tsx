@@ -20,8 +20,8 @@ import { Reveal } from "@/app/_components/Reveal";
  * RESPONSIVE
  *   ≥ lg : the track runs horizontally, stops evenly spaced, copy centred under
  *          each one.
- *   < lg : the same track turns vertical down the left edge and the copy sits
- *          beside each stop — the shape a process actually has on a phone.
+ *   < lg : the stops become swipeable cards with mandatory snap, keeping one
+ *          step in focus while the next card peeks into view.
  *
  * MOTION — the track draws itself left-to-right (or top-to-bottom) once, and the
  * four stops arrive in a 90ms stagger as the section comes into view. The draw
@@ -29,8 +29,6 @@ import { Reveal } from "@/app/_components/Reveal";
  * the visitor scrolls.
  */
 export function HomeJourney({ s }: { s: PublicStrings }) {
-  const lastIndex = JOURNEY_STEPS.length - 1;
-
   return (
     <section
       id={SECTION_IDS.journey}
@@ -64,21 +62,16 @@ export function HomeJourney({ s }: { s: PublicStrings }) {
             className="track-line absolute left-[11.7%] right-[11.7%] top-[22px] hidden h-px bg-gradient-to-r from-orange-500 via-orange-500/45 to-slate-200 lg:block dark:to-white/15"
           />
 
-          <ol className="relative grid gap-8 lg:grid-cols-4 lg:gap-6">
+          <ol className="snap-rail relative -mx-4 flex gap-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-6 lg:overflow-visible lg:px-0 lg:pb-0">
             {JOURNEY_STEPS.map((step, index) => {
               const Icon = step.icon;
 
               return (
-                <li key={step.titleKey}>
+                <li
+                  key={step.titleKey}
+                  className="snap-item surface-plate min-h-44 basis-[calc(100%-2.75rem)] shrink-0 rounded-2xl p-5 sm:basis-[calc(100%-4rem)] sm:p-6 lg:min-h-0 lg:basis-auto lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none dark:lg:bg-transparent dark:lg:shadow-none"
+                >
                   <Reveal delay={index * 90} className="relative flex gap-4 lg:block">
-                    {/* The track, turned vertical, drawn stop by stop. */}
-                    {index < lastIndex && (
-                      <span
-                        aria-hidden="true"
-                        className="track-line-v absolute bottom-[-2rem] left-[21.5px] top-11 w-px bg-slate-200 lg:hidden dark:bg-white/15"
-                      />
-                    )}
-
                     <span className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white font-mono text-sm font-extrabold text-[var(--brand-navy-900)] shadow-[0_1px_2px_rgba(15,23,42,0.06)] lg:mx-auto dark:border-white/15 dark:bg-[var(--brand-navy-950)] dark:text-white">
                       {String(index + 1).padStart(2, "0")}
                     </span>
