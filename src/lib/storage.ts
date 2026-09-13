@@ -172,6 +172,7 @@ async function saveToSupabaseStorage(options: {
   const bucket = process.env.SUPABASE_STORAGE_BUCKET?.trim() || DEFAULT_SUPABASE_STORAGE_BUCKET;
   const bucketPath = encodeURIComponent(bucket);
   const objectPath = encodeStoragePath(options.key);
+  const uploadBody = new Uint8Array(options.bytes).buffer;
   const response = await fetch(`${supabaseUrl}/storage/v1/object/${bucketPath}/${objectPath}`, {
     method: "POST",
     headers: {
@@ -180,7 +181,7 @@ async function saveToSupabaseStorage(options: {
       "Content-Type": options.mimeType,
       "x-upsert": "false",
     },
-    body: options.bytes,
+    body: uploadBody,
   });
 
   if (!response.ok) {
