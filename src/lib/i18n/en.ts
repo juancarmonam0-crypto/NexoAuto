@@ -25,7 +25,7 @@ export const en = {
   "meta.siteName": "Nexo Auto",
   "meta.home.title": "Nexo Auto — Better cars. A simpler way.",
   "meta.home.description":
-    "Carefully selected used cars with clear pricing and flexible ways to buy. See what is available near you and understand your options before you decide.",
+    "Cars in stock at Nexo Auto, each listed with its asking price, mileage and photos. See what is available, then talk through your payment options with us.",
   "meta.inventory.title": "Inventory",
   "meta.inventory.description":
     "Every vehicle currently listed at Nexo Auto, with asking price, mileage, equipment and photos.",
@@ -77,22 +77,28 @@ export const en = {
   "home.hero.eyebrow": "Simple car buying",
   "home.hero.headline": "Better cars.\nA {{simpler way.}}",
   "home.hero.subtext":
-    "Carefully selected used cars, clear pricing, and flexible ways to buy. See what is available and understand your options before you decide.",
+    "Every listing shows the asking price, the mileage and the photos. Look through the details, understand your payment options, and decide when you are ready.",
   "home.hero.primaryCta": "Browse cars",
   "home.hero.secondaryCta": "How it works",
-  "home.hero.assurancePricing": "Transparent pricing",
-  "home.hero.assurancePricingBody": "No hidden fees",
-  "home.hero.assuranceSelection": "Carefully selected inventory",
-  "home.hero.assuranceSelectionBody": "Quality you can trust",
-  "home.hero.assuranceFinancing": "Financing guidance available",
-  "home.hero.assuranceFinancingBody": "Options for your budget",
+  /*
+   * The three-line spec strip under the hero actions. Each line describes
+   * something the listing actually contains — nothing here is a claim about
+   * inspections, history or quality that the product cannot back up.
+   */
+  "home.hero.specPrice": "Price on every listing",
+  "home.hero.specPriceBody": "The asking price, up front",
+  "home.hero.specDetails": "Specs and photos first",
+  "home.hero.specDetailsBody": "Mileage, equipment, photos",
+  "home.hero.specOptions": "Ways to pay, explained",
+  "home.hero.specOptionsBody": "Cash, financing, lease",
 
   // ---- Homepage: inventory preview ---------------------------------------
   "home.inventory.eyebrow": "Inventory",
   "home.inventory.title": "Find the right car for your next chapter.",
-  "home.inventory.subtitle":
-    "Every vehicle below is actually available right now, with the asking price shown up front.",
+  "home.inventory.subtitle": "The cars we have right now. Open any listing for the full spec sheet.",
   "home.inventory.viewAll": "View all inventory",
+  "home.inventory.browseAllTitle": "See the full list",
+  "home.inventory.browseAllBody": "Every car in stock, with its asking price.",
   "home.inventory.empty.title": "New vehicles are being selected",
   "home.inventory.empty.body":
     "We list vehicles as they are ready — not before. Tell us what you are looking for and we will let you know when something fits.",
@@ -105,29 +111,29 @@ export const en = {
   "home.journey.eyebrow": "How it works",
   "home.journey.title": "Four steps, no guesswork",
   "home.journey.subtitle": "The same process whether you pay cash or finance.",
-  "home.journey.1.title": "Browse",
-  "home.journey.1.body": "Explore real available inventory.",
+  "home.journey.1.title": "Find your car",
+  "home.journey.1.body": "Start with what is in stock: photos, mileage and the asking price.",
   "home.journey.2.title": "Compare",
-  "home.journey.2.body": "See price, photos and vehicle details.",
-  "home.journey.3.title": "Build your deal",
-  "home.journey.3.body": "Review options that fit your budget.",
-  "home.journey.4.title": "Drive with confidence",
-  "home.journey.4.body": "Complete the next steps with clear information.",
-  "home.journey.cta": "Start with the cars",
+  "home.journey.2.body": "Open the full spec sheet and put your options side by side.",
+  "home.journey.3.title": "Talk numbers",
+  "home.journey.3.body": "Cash, financing or something in between — pick what fits your budget.",
+  "home.journey.4.title": "Take the keys",
+  "home.journey.4.body": "Finish the paperwork with the numbers already agreed.",
+  "home.journey.cta": "See how you can pay",
 
   // ---- Homepage: buying options band -------------------------------------
   "home.options.eyebrow": "Buying options",
   "home.options.title": "Multiple ways to buy.\nOne {{simple experience.}}",
   "home.options.subtitle":
-    "Choose the structure that fits your budget. We will walk through the numbers with you before anything is decided.",
+    "Choose the structure that fits your budget. We explain each one before anything is decided.",
   "home.options.cash.title": "Pay cash",
   "home.options.cash.body": "Agree the price, complete the paperwork, take the keys.",
   "home.options.finance.title": "Traditional financing",
-  "home.options.finance.body": "Apply with a lender, with guidance through the process.",
+  "home.options.finance.body": "Apply with a lender, with help at each step.",
   "home.options.guided.title": "Guided deal structuring",
   "home.options.guided.body": "Bring a budget and see the terms that fit it.",
   "home.options.flexible.title": "Lease / lease-to-own",
-  "home.options.flexible.body": "Ask what applies to the vehicle you are considering.",
+  "home.options.flexible.body": "Ask which vehicles this applies to.",
   "home.options.disclaimerLabel": "About financing:",
   "home.options.disclaimer":
     "payment, term and rate figures are estimates for planning only — not a loan offer, not a credit decision, and not a guarantee of approval. Final terms come from the lender and depend on your application.",
@@ -136,9 +142,21 @@ export const en = {
   "home.family.eyebrow": "Part of the Nexo family",
   "home.family.title": "More than a car.\nA better {{tomorrow.}}",
   "home.family.body":
-    "Nexo Auto is part of the Nexo family — the same team behind Nexo Rental. Built around a simple idea: make everyday services easier to understand and easier to use.",
-  "home.family.cta": "Browse inventory",
-  "home.family.note": "The same drive, a simpler way forward.",
+    "Nexo Auto is part of the Nexo family, alongside Nexo Rental. Different services, same idea: keep it clear and keep it simple.",
+
+  // ---- Homepage: closing moment ------------------------------------------
+  /*
+   * The page's conclusion. It states the whole promise in three beats — find
+   * the car, see the price, choose how to pay — and then offers the two things
+   * a visitor can actually do from here.
+   */
+  "home.closing.eyebrow": "Ready when you are",
+  "home.closing.title": "Find the car.\nSee the price.\nChoose how to pay.",
+  "home.closing.body":
+    "Browse what is in stock, or call and tell us what you are looking for. Either way, you will know the price and the options before you decide.",
+  "home.closing.primaryCta": "Browse cars",
+  "home.closing.callCta": "Call {phone}",
+  "home.closing.emailCta": "Email us",
 
   // ---- Vehicle card -------------------------------------------------------
   "card.photosSoon": "Photos coming soon",
@@ -233,8 +251,7 @@ export const en = {
   "footer.noContact": "Contact details appear here once they are configured in dealer settings.",
   "footer.financeNote": "Financing figures on listings are estimates, never approvals.",
   "footer.rights": "© {year} {name}. All rights reserved.",
-  "footer.taglineFallback":
-    "Carefully selected used cars, clear pricing, and a straightforward path from browsing to keys.",
+  "footer.taglineFallback": "Cars in stock, prices in plain sight, and a clear path from browsing to keys.",
   "footer.appearance": "Appearance",
 
   // ---- Customer-visible failure states -----------------------------------

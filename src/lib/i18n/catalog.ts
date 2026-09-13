@@ -53,6 +53,7 @@ export const PARAM_KEYS = {
   "a11y.srHeadline": ["name"],
   "home.inventory.empty.call": ["phone"],
   "home.inventory.empty.mailSubject": ["name"],
+  "home.closing.callCta": ["phone"],
   "card.viewAction": ["vehicle", "stock", "price"],
   "card.photoAlt": ["vehicle"],
   "inventory.intro": ["name"],

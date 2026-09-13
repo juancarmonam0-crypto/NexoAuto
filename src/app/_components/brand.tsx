@@ -38,6 +38,22 @@ const ASSET_BUCKET = "Nexo auto imagenes";
 const ASSET_FILE = "85ea2b4f-556e-4a9e-926d-721fd2328e78.png";
 /** Local path, deliberately space-free so the URL needs no escaping. */
 const ASSET_DIR = "brand";
+/** The approved hero object's name, without its extension. */
+const HERO_STEM = "816a8203-84c9-4cca-8bc5-695ebaaf97d7";
+/** The approved mark object's name, without its extension. */
+const MARK_STEM = "85ea2b4f-556e-4a9e-926d-721fd2328e78";
+/**
+ * Derived delivery variants live in their own directory.
+ *
+ * WHY A SUBDIRECTORY
+ * It separates the two kinds of file unambiguously: `brand/` holds the approved
+ * originals exactly as delivered, and `brand/opt/` holds re-encodes of those
+ * originals. That distinction is also what lets `next.config.ts` cache the
+ * variants immutably for a year while the originals stay revalidated — a
+ * directory prefix is a cache rule that cannot be got subtly wrong, where a
+ * filename pattern would be.
+ */
+const VARIANT_DIR = `${ASSET_DIR}/opt`;
 
 /** The approved file, served by this application. */
 export const NEXO_MARK_LOCAL = `/${ASSET_DIR}/${ASSET_FILE}`;
@@ -82,7 +98,7 @@ export function nexoMarkUrl(_width?: number): string {
  *   1672×941 (16:9), byte-identical to the approved object
  *   (SHA-256 529f2c1b3dba8231d5334b42791aa56afb77f36b0673cadc7ab97b7eea7e9440)
  */
-const HERO_FILE = "816a8203-84c9-4cca-8bc5-695ebaaf97d7.png";
+const HERO_FILE = `${HERO_STEM}.png`;
 
 /** The approved hero image, served by this application. */
 export const NEXO_HERO_LOCAL = `/${ASSET_DIR}/${HERO_FILE}`;
@@ -103,6 +119,70 @@ export const NEXO_HERO_HEIGHT = 941;
 export function nexoHeroUrl(): string {
   return NEXO_HERO_LOCAL;
 }
+
+/* ---------------------------------------------------------------------------
+   DELIVERY VARIANTS OF THE APPROVED ARTWORK
+
+   The two approved PNGs are 1.85 MB and 1.05 MB, and they were being sent at
+   full size to every visitor: the hero was the largest contentful paint on every
+   cold load, and the mark — rendered between 30px and 52px — was downloaded
+   twice, once as the favicon and once as the header image.
+
+   These are the SAME artwork, decoded from the same approved bytes and scaled
+   once, offline, by the repository's own tooling. Nothing is re-cropped,
+   re-composed, redrawn or re-coloured, so what a visitor sees is unchanged; only
+   the bytes on the wire change. The approved originals stay in `public/brand/`
+   untouched and are still what `NEXO_HERO_LOCAL`, `nexoMarkUrl()` and the
+   documented SHA-256 hashes point at.
+
+   A new asset means a new file name here, which is why the variants can be
+   cached immutably (see `next.config.ts`).
+   --------------------------------------------------------------------------- */
+
+/** The hero widths a full-bleed hero is actually displayed at. */
+export const NEXO_HERO_WIDTHS = [640, 960, 1280, 1672] as const;
+
+/** One hero delivery variant. `webp` unless a fallback is being described. */
+export function nexoHeroVariant(width: number, format: "webp" | "jpg" = "webp"): string {
+  return `/${VARIANT_DIR}/${HERO_STEM}-${width}.${format}`;
+}
+
+/** WebP candidates for `<source type="image/webp">`. */
+export const NEXO_HERO_WEBP_SRC_SET = NEXO_HERO_WIDTHS.map(
+  (width) => `${nexoHeroVariant(width)} ${width}w`,
+).join(", ");
+
+/**
+ * The fallback for engines that cannot decode WebP.
+ *
+ * A 1280-wide progressive JPEG (104 KB) rather than the 1.85 MB PNG, with the
+ * approved PNG kept as the largest candidate so a very wide display still gets
+ * the full-resolution original.
+ */
+export const NEXO_HERO_FALLBACK_SRC = nexoHeroVariant(1280, "jpg");
+export const NEXO_HERO_FALLBACK_SRC_SET = `${nexoHeroVariant(1280, "jpg")} 1280w, ${NEXO_HERO_LOCAL} ${NEXO_HERO_WIDTH}w`;
+
+/**
+ * Mark delivery sizes, in pixels.
+ *
+ * `32` and `48` exist for the favicon, which a browser requests on every cold
+ * visit; `96` and `192` cover the mark as rendered (30–52 CSS px at up to 3x).
+ */
+export const NEXO_MARK_SIZES = [32, 48, 96, 192] as const;
+
+/** One mark delivery variant. */
+export function nexoMarkVariant(pixels: number): string {
+  return `/${VARIANT_DIR}/${MARK_STEM}-${pixels}.png`;
+}
+
+/**
+ * Candidates for the rendered mark. The `sizes` attribute at the call site is
+ * the mark's real rendered width, so a 36px header logo fetches the 96px file
+ * (~11 KB) instead of the 1254px original (~1.03 MB).
+ */
+export const NEXO_MARK_SRC_SET = ([48, 96, 192] as const)
+  .map((pixels) => `${nexoMarkVariant(pixels)} ${pixels}w`)
+  .join(", ");
 
 /** Wordmark sizes. The mark is square, so one dimension drives everything. */
 export type LogoSize = "sm" | "md" | "lg";
@@ -162,13 +242,19 @@ export function NexoMark({ size = 40, tone = "light", plate, className = "" }: N
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={nexoMarkUrl(size)}
+        // The approved artwork, delivered at the size it is actually drawn at.
+        // A browser that understands `srcset` never fetches the 1254px original.
+        srcSet={NEXO_MARK_SRC_SET}
+        sizes={`${rendered}px`}
         alt=""
         width={rendered}
         height={rendered}
         // Above the fold in the header, so it must not wait behind lazy images.
+        // Deliberately NOT `fetchPriority="high"`: the hero photograph is the
+        // largest contentful paint, and a 36px logo must not be handed the same
+        // network priority as it.
         loading="eager"
         decoding="async"
-        fetchPriority="high"
         className="h-full w-full object-contain"
       />
     </span>

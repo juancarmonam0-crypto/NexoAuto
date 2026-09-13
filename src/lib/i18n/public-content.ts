@@ -23,13 +23,14 @@ import type { TranslationKey } from "@/lib/i18n/catalog";
  * it. That is also what makes the copy testable without rendering a page: the
  * key lists below are checked for completeness in both languages.
  *
- * SHAPE (from the approved mockup)
- *   hero → inventory → four-step journey → navy buying-options band →
- *   Nexo family story → dark footer
+ * SHAPE (the landing's art direction)
+ *   hero → inventory → four-step route → navy buying-options slab →
+ *   Nexo family → closing conversion moment → dark footer
  *
- * The previous six-card explainer grid is GONE on purpose: the mockup shows cars
- * early and explains the business in four short steps, and a marketing page for a
- * dealership should sell the cars, not the software.
+ * Every section uses a DIFFERENT visual grammar on purpose — a photographic
+ * editorial grid, a connected route, a ledger, a brand plate, a closing panel —
+ * so the page reads as one art-directed experience instead of the same card
+ * grid repeated at intervals.
  */
 
 export interface HeroAssurance {
@@ -38,13 +39,18 @@ export interface HeroAssurance {
 }
 
 /**
- * Exactly three compact credentials under the hero actions — the mockup's
- * restraint. Icons support them; they are not the design.
+ * Exactly three compact cards under the hero actions.
+ *
+ * These are the page's "spec strip", and every line describes something the
+ * public listing genuinely contains: the asking price, the vehicle's own
+ * details and photographs, and the buying structures the dealership can
+ * actually offer. Nothing here claims an inspection, a history report, a
+ * warranty or a quality standard the product cannot evidence.
  */
 export const HERO_ASSURANCES: readonly HeroAssurance[] = [
-  { key: "home.hero.assurancePricing", bodyKey: "home.hero.assurancePricingBody" },
-  { key: "home.hero.assuranceSelection", bodyKey: "home.hero.assuranceSelectionBody" },
-  { key: "home.hero.assuranceFinancing", bodyKey: "home.hero.assuranceFinancingBody" },
+  { key: "home.hero.specPrice", bodyKey: "home.hero.specPriceBody" },
+  { key: "home.hero.specDetails", bodyKey: "home.hero.specDetailsBody" },
+  { key: "home.hero.specOptions", bodyKey: "home.hero.specOptionsBody" },
 ] as const;
 
 export interface JourneyStep {
@@ -53,7 +59,13 @@ export interface JourneyStep {
   bodyKey: TranslationKey;
 }
 
-/** Four steps, one to two lines each. No walls of text. */
+/**
+ * Four steps, one to two lines each. No walls of text.
+ *
+ * The titles are deliberately verbs a buyer would use about themselves
+ * ("Find your car", "Take the keys") rather than process nouns, because the
+ * journey section's job is to make the next action obvious.
+ */
 export const JOURNEY_STEPS: readonly JourneyStep[] = [
   { icon: Search, titleKey: "home.journey.1.title", bodyKey: "home.journey.1.body" },
   { icon: Compass, titleKey: "home.journey.2.title", bodyKey: "home.journey.2.body" },

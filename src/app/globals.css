@@ -49,6 +49,17 @@
 
     --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
+    /*
+     * MOTION TOKENS — one curve and two durations, used everywhere.
+     *
+     * The curve is a decelerating ease-out with no overshoot: movement arrives
+     * and settles. Nothing in the public experience bounces, springs or
+     * overshoots, because that reads as a game rather than as a car.
+     */
+    --ease-brand: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur-base: 420ms;
+    --dur-slow: 720ms;
+
     color-scheme: light;
   }
 
@@ -141,6 +152,97 @@
   border-color: var(--surface-border);
 }
 
+/*
+ * A MARKETING PLATE — one step richer than a list-row card.
+ *
+ * `surface-card` is the operator/UI surface: a hairline border and a 1px
+ * shadow, tuned for dense screens. The public landing uses photography as its
+ * main surface, so the plates that do appear are allowed a slightly deeper,
+ * two-layer shadow and a real hover state. Keeping them separate means the
+ * operator application never inherits marketing elevation.
+ */
+.surface-plate {
+  background-color: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  box-shadow:
+    0 1px 2px 0 rgba(15, 23, 42, 0.04),
+    0 18px 40px -28px rgba(15, 23, 42, 0.28);
+  transition:
+    box-shadow var(--dur-base) var(--ease-brand),
+    transform var(--dur-base) var(--ease-brand);
+}
+
+.dark .surface-plate {
+  box-shadow:
+    0 1px 2px 0 rgba(0, 0, 0, 0.45),
+    0 20px 44px -30px rgba(0, 0, 0, 0.85);
+}
+
+/* Restrained hover: 3px of lift and a deeper shadow. No scale, no tilt. */
+.plate-hover:hover {
+  transform: translate3d(0, -3px, 0);
+  box-shadow:
+    0 2px 4px 0 rgba(15, 23, 42, 0.05),
+    0 30px 55px -30px rgba(15, 23, 42, 0.38);
+}
+
+.dark .plate-hover:hover {
+  box-shadow:
+    0 2px 4px 0 rgba(0, 0, 0, 0.5),
+    0 32px 60px -32px rgba(0, 0, 0, 0.9);
+}
+
+/*
+ * PHOTO DEPTH — a short vignette at the foot of a vehicle photograph.
+ *
+ * Photographs are the page's protagonists, so they are never washed out or
+ * covered. This only seats the image into its frame instead of letting it look
+ * pasted on: the bottom 40% loses a little light, the top stays untouched.
+ */
+.photo-depth::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(4, 20, 43, 0.34) 0%, rgba(4, 20, 43, 0) 44%);
+}
+
+/*
+ * THE ROUTE TRACK — the journey section's connecting line.
+ *
+ * It is a decorative hairline (`aria-hidden`), so it is only ever hidden while
+ * the client-side reveal is armed. With JavaScript unavailable the attributes
+ * below are never set and the track is simply drawn, never invisible.
+ */
+.track-line {
+  transform-origin: left center;
+}
+
+.track-line-v {
+  transform-origin: center top;
+}
+
+[data-reveal-armed] .track-line,
+[data-reveal-armed] .track-line-v {
+  transition: transform 1100ms var(--ease-brand) 80ms;
+}
+
+[data-reveal-armed] .track-line {
+  transform: scaleX(0);
+}
+
+[data-reveal-armed] .track-line-v {
+  transform: scaleY(0);
+}
+
+[data-reveal-armed][data-reveal="shown"] .track-line {
+  transform: scaleX(1);
+}
+
+[data-reveal-armed][data-reveal="shown"] .track-line-v {
+  transform: scaleY(1);
+}
+
 .text-muted {
   color: var(--surface-muted);
 }
@@ -218,3 +320,92 @@ textarea {
 .snap-item {
   scroll-snap-align: start;
 }
+
+/* ---------------------------------------------------------------------------
+   MOTION LANGUAGE
+
+   Two primitives, and nothing else:
+
+   1. `.rise`      — the hero's entrance. Pure CSS, so the first screen is
+                     choreographed without shipping any JavaScript for it.
+   2. `[data-reveal]` — scroll reveals. The SERVER renders every section
+                     visible; `Reveal.tsx` then arms the animation on the client
+                     and releases each element as it enters the viewport.
+
+   The ordering matters and is deliberate: an element is never hidden by markup.
+   If the script does not run, is blocked, or the visitor prefers reduced motion,
+   the page is fully visible and complete rather than blank. Search engines and
+   assistive technology therefore always see the whole document.
+   --------------------------------------------------------------------------- */
+
+@keyframes nexo-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise {
+  animation: nexo-rise var(--dur-slow) var(--ease-brand) both;
+  animation-delay: var(--rise-delay, 0ms);
+}
+
+/* Armed by the client, released on scroll. */
+[data-reveal="hidden"] {
+  opacity: 0;
+}
+
+[data-reveal="hidden"][data-reveal-motion="rise"] {
+  transform: translate3d(0, 22px, 0);
+}
+
+[data-reveal="shown"] {
+  opacity: 1;
+  transform: none;
+}
+
+[data-reveal-armed] {
+  transition:
+    opacity var(--dur-slow) var(--ease-brand),
+    transform var(--dur-slow) var(--ease-brand);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+/*
+   REDUCED MOTION — the page keeps its composition and loses every movement.
+   `!important` is used because these rules must beat the utility classes and
+   the inline delay an element may carry.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    animation: none !important;
+  }
+
+  [data-reveal],
+  [data-reveal-armed] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  [data-reveal-armed] .track-line,
+  [data-reveal-armed] .track-line-v {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .plate-hover:hover {
+    transform: none !important;
+  }
+
+  /* Image zoom and CTA nudges are motion, not colour. */
+  .photo-zoom,
+  .motion-nudge {
+    transform: none !important;
+  }
+}
+

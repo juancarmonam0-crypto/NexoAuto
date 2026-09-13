@@ -6,6 +6,7 @@ import {
   NEXO_MARK_SHA256,
   NEXO_MARK_SOURCE,
   nexoMarkUrl,
+  nexoMarkVariant,
 } from "@/app/_components/brand";
 import { themeBootScript } from "@/lib/theme";
 import { getLanguage } from "@/lib/i18n";
@@ -30,7 +31,7 @@ import "./globals.css";
 
 const SITE_NAME = "Nexo Auto";
 const SITE_DESCRIPTION =
-  "Carefully selected used cars with clear pricing and flexible ways to buy. See what is available and understand your options before you decide.";
+  "Cars in stock at Nexo Auto, each listed with its asking price, mileage and photos. See what is available, then talk through your payment options with us.";
 
 export const metadata: Metadata = {
   title: { default: `${SITE_NAME} — Better cars. A simpler way.`, template: `%s · ${SITE_NAME}` },
@@ -38,8 +39,23 @@ export const metadata: Metadata = {
   applicationName: SITE_NAME,
   robots: { index: true, follow: true },
   icons: {
-    icon: [{ url: nexoMarkUrl(), type: "image/png" }],
-    apple: [{ url: nexoMarkUrl(), type: "image/png" }],
+    /*
+      DELIVERY VARIANTS FIRST, with explicit sizes.
+
+      A favicon is requested on every cold visit, and the approved mark is a
+      1254x1254 / 1.03 MB PNG. Declaring the real sizes lets the browser take the
+      32px (2 KB) or 48px (4 KB) variant for the tab instead of the original —
+      which measured as the FIRST request of the document, ahead of the hero
+      photograph, on the previous build. The approved artwork is still offered
+      here, sized honestly, as the high-resolution option.
+    */
+    icon: [
+      { url: nexoMarkVariant(32), sizes: "32x32", type: "image/png" },
+      { url: nexoMarkVariant(48), sizes: "48x48", type: "image/png" },
+      { url: nexoMarkVariant(192), sizes: "192x192", type: "image/png" },
+      { url: nexoMarkUrl(), sizes: "1254x1254", type: "image/png" },
+    ],
+    apple: [{ url: nexoMarkUrl(), sizes: "1254x1254", type: "image/png" }],
   },
   openGraph: {
     type: "website",

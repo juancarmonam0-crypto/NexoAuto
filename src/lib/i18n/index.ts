@@ -1,4 +1,5 @@
 import { cookies, headers } from "next/headers";
+import { cache } from "react";
 import { DEFAULT_LANGUAGE, LANGUAGE_COOKIE, type Language, languageFromAcceptLanguage, parseLanguage } from "@/lib/i18n/preferences";
 import { strings, type PublicStrings } from "@/lib/i18n/catalog";
 
@@ -36,6 +37,20 @@ export async function getLanguage(source: LanguageSource = {}): Promise<Language
   const explicit = parseLanguage(source.searchParam);
   if (explicit) return explicit;
 
+  return resolveStoredLanguage();
+}
+
+/**
+ * The stored preference and the browser hint — resolved ONCE per request.
+ *
+ * The root layout, `generateMetadata` and the page body each need the language,
+ * and each of them used to read cookies and headers and re-parse
+ * `Accept-Language` independently: three times per render for a value that cannot
+ * change mid-request. React's `cache()` scopes this to the request, and because
+ * everything request-specific is read inside the wrapped function the memo needs
+ * no arguments at all — one entry per render.
+ */
+const resolveStoredLanguage = cache(async (): Promise<Language> => {
   const [cookieStore, headerList] = await Promise.all([cookies(), headers()]);
 
   const stored = parseLanguage(cookieStore.get(LANGUAGE_COOKIE)?.value);
@@ -45,7 +60,7 @@ export async function getLanguage(source: LanguageSource = {}): Promise<Language
   // on the default rather than taking a different path through the page.
   const hinted = languageFromAcceptLanguage(headerList.get("accept-language"));
   return hinted ?? DEFAULT_LANGUAGE;
-}
+});
 
 /**
  * The strings bundle for this request, accepting an optional `?lang=` override.

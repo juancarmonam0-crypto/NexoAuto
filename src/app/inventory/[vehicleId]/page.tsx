@@ -1,3 +1,4 @@
+import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -29,6 +30,17 @@ import { ArrowLeft, ArrowRight, Calculator, CheckCircle2, ChevronRight, Mail, Me
 
 export const dynamic = "force-dynamic";
 
+/**
+ * One vehicle, read ONCE per request.
+ *
+ * `generateMetadata` and the page body both need the same vehicle, and each used
+ * to call `getPublicVehicle()` independently — two listing queries plus two photo
+ * queries for one page view. React's `cache()` scopes this to the request, so the
+ * second call is a memory lookup. It deliberately does NOT cache across requests:
+ * this page stays dynamic so a car's availability and price are never stale.
+ */
+const getVehicleOnce = cache(async (vehicleId: string) => getPublicVehicle(vehicleId));
+
 interface PageProps {
   params: Promise<{ vehicleId: string }>;
   searchParams: Promise<{ lang?: string }>;
@@ -37,7 +49,7 @@ interface PageProps {
 export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const [{ vehicleId }, query] = await Promise.all([params, searchParams]);
   const [vehicle, s] = await Promise.all([
-    getPublicVehicle(vehicleId),
+    getVehicleOnce(vehicleId),
     getPublicStrings({ searchParam: query.lang ?? null }),
   ]);
 
@@ -98,7 +110,7 @@ export default async function VehicleDetailPage({ params, searchParams }: PagePr
   const [{ vehicleId }, query] = await Promise.all([params, searchParams]);
 
   const [vehicle, dealer, s] = await Promise.all([
-    getPublicVehicle(vehicleId),
+    getVehicleOnce(vehicleId),
     getPublicDealerInfo(),
     getPublicStrings({ searchParam: query.lang ?? null }),
   ]);

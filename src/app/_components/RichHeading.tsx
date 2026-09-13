@@ -21,14 +21,17 @@ export function RichHeading({
   as: Tag = "h2",
   className = "",
   emphasisClassName = "text-orange-600 dark:text-orange-500",
+  id,
 }: {
   runs: EmphasisRun[];
   as?: "h1" | "h2" | "h3" | "p" | "span";
   className?: string;
   emphasisClassName?: string;
+  /** Lets the enclosing section point `aria-labelledby` at this heading. */
+  id?: string;
 }) {
   return (
-    <Tag className={className}>
+    <Tag id={id} className={className}>
       {runs.map((run, index) => (
         <RichRun key={index} run={run} emphasisClassName={emphasisClassName} />
       ))}
