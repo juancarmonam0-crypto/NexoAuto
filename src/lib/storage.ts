@@ -79,6 +79,14 @@ export function detectFileType(bytes: Uint8Array): { type: DetectedFileType; mim
   return null;
 }
 
+function looksLikeHeicOrHeif(bytes: Uint8Array): boolean {
+  if (bytes.length < 12) return false;
+  const box = String.fromCharCode(...bytes.slice(4, 8));
+  if (box !== "ftyp") return false;
+  const brand = String.fromCharCode(...bytes.slice(8, 12));
+  return ["heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1"].includes(brand);
+}
+
 export function validateUpload(input: UploadValidationInput): UploadValidationResult {
   const limit = input.kind === "image" ? MAX_IMAGE_BYTES : MAX_DOCUMENT_BYTES;
   if (input.sizeBytes <= 0) return { ok: false, error: "The file is empty." };
@@ -89,6 +97,12 @@ export function validateUpload(input: UploadValidationInput): UploadValidationRe
 
   const detected = detectFileType(input.bytes);
   if (!detected) {
+    if (input.kind === "image" && looksLikeHeicOrHeif(input.bytes)) {
+      return {
+        ok: false,
+        error: "HEIC/HEIF photos are not supported yet. Export or share the photo as JPEG, PNG, or WebP and try again.",
+      };
+    }
     return { ok: false, error: "Unsupported file. Upload a JPEG, PNG, WebP image or a PDF." };
   }
   if (input.kind === "image" && detected.type === "pdf") {
@@ -134,21 +148,60 @@ export interface StoredFile {
 }
 
 const LOCAL_UPLOAD_ROOT = path.join(process.cwd(), "var", "uploads");
+const DEFAULT_SUPABASE_STORAGE_BUCKET = "Nexo auto imagenes";
 
-/**
- * Local development storage.
- *
- * Production should set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY; when object
- * storage is configured this function defers to it. Until then files land under
- * ./var/uploads and are served by an authenticated route handler, never from
- * the public directory.
- */
-export async function saveUploadedFile(options: {
+function encodeStoragePath(value: string): string {
+  return value
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+async function saveToSupabaseStorage(options: {
   key: string;
   bytes: Uint8Array;
+  mimeType: string;
 }): Promise<StoredFile> {
-  const safeKey = options.key.replace(/\\/g, "/").replace(/\.\./g, "");
-  const target = path.join(LOCAL_UPLOAD_ROOT, safeKey);
+  const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/+$/, "");
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error("Supabase object storage is not configured.");
+  }
+
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET?.trim() || DEFAULT_SUPABASE_STORAGE_BUCKET;
+  const bucketPath = encodeURIComponent(bucket);
+  const objectPath = encodeStoragePath(options.key);
+  const response = await fetch(`${supabaseUrl}/storage/v1/object/${bucketPath}/${objectPath}`, {
+    method: "POST",
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      "Content-Type": options.mimeType,
+      "x-upsert": "false",
+    },
+    body: options.bytes,
+  });
+
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 500);
+    throw new Error(`Supabase Storage upload failed (${response.status}): ${detail || response.statusText}`);
+  }
+
+  return {
+    key: options.key,
+    url: `${supabaseUrl}/storage/v1/object/public/${bucketPath}/${objectPath}`,
+    sizeBytes: options.bytes.byteLength,
+    mimeType: options.mimeType,
+  };
+}
+
+async function saveToLocalStorage(options: {
+  key: string;
+  bytes: Uint8Array;
+  mimeType: string;
+}): Promise<StoredFile> {
+  const target = path.join(LOCAL_UPLOAD_ROOT, options.key);
   const resolvedRoot = path.resolve(LOCAL_UPLOAD_ROOT);
   if (!path.resolve(target).startsWith(resolvedRoot)) {
     throw new Error("Refusing to write outside the upload directory.");
@@ -158,11 +211,36 @@ export async function saveUploadedFile(options: {
   await writeFile(target, options.bytes);
 
   return {
-    key: safeKey,
-    url: `/api/files/${safeKey}`,
+    key: options.key,
+    url: `/api/files/${options.key}`,
     sizeBytes: options.bytes.byteLength,
-    mimeType: detectFileType(options.bytes)?.mime ?? "application/octet-stream",
+    mimeType: options.mimeType,
   };
+}
+
+/**
+ * Stores validated bytes in Supabase Storage whenever the production object
+ * storage credentials are available. Local disk is a development-only fallback:
+ * Vercel's filesystem is ephemeral and must never be treated as durable storage.
+ */
+export async function saveUploadedFile(options: {
+  key: string;
+  bytes: Uint8Array;
+}): Promise<StoredFile> {
+  const safeKey = options.key.replace(/\\/g, "/").replace(/\.\./g, "");
+  const mimeType = detectFileType(options.bytes)?.mime ?? "application/octet-stream";
+
+  if (isObjectStorageConfigured()) {
+    return saveToSupabaseStorage({ key: safeKey, bytes: options.bytes, mimeType });
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "Photo storage is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY for production uploads.",
+    );
+  }
+
+  return saveToLocalStorage({ key: safeKey, bytes: options.bytes, mimeType });
 }
 
 export function isObjectStorageConfigured(): boolean {
