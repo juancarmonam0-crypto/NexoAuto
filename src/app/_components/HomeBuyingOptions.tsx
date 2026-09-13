@@ -32,8 +32,8 @@ export function HomeBuyingOptions({ s }: { s: PublicStrings }) {
       aria-labelledby="home-options-heading"
       className="brand-panel relative z-10 -mt-8 rounded-t-[2rem] sm:rounded-t-[2.75rem]"
     >
-      <div className="mx-auto max-w-6xl px-4 pb-12 pt-14 sm:px-6 sm:pb-16 sm:pt-20">
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-12">
+      <div className="mx-auto max-w-6xl px-4 pb-9 pt-11 sm:px-6 sm:pb-12 sm:pt-16">
+        <div className="grid grid-cols-1 gap-7 sm:gap-9 lg:grid-cols-12 lg:gap-12">
           <Reveal className="lg:col-span-5">
             <SectionIntro
               index="03"
@@ -59,10 +59,10 @@ export function HomeBuyingOptions({ s }: { s: PublicStrings }) {
                 return (
                   <li
                     key={option.titleKey}
-                    className="snap-item min-h-44 basis-[calc(100%-2.75rem)] shrink-0 rounded-2xl border border-white/15 bg-white/[0.06] p-5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.8)] sm:basis-[calc(100%-4rem)] sm:p-6 lg:min-h-0 lg:basis-auto lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none"
+                    className="snap-item basis-[calc(100%-3.5rem)] shrink-0 rounded-2xl border border-white/15 border-t-2 border-t-orange-400/80 bg-gradient-to-br from-white/[0.09] to-white/[0.035] p-5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.8)] sm:basis-[calc(100%-5rem)] sm:p-6 lg:min-h-0 lg:basis-auto lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none"
                   >
                     <Reveal delay={index * 80}>
-                      <div className="grid grid-cols-[2.25rem_1fr_auto] items-start gap-4 sm:grid-cols-[2.75rem_1fr_auto] sm:gap-5 lg:border-t lg:border-white/10 lg:py-6">
+                      <div className="grid grid-cols-[2.25rem_1fr_auto] items-start gap-3 sm:grid-cols-[2.75rem_1fr_auto] sm:gap-5 lg:border-t lg:border-white/10 lg:py-6">
                         <span
                           aria-hidden="true"
                           className="pt-0.5 font-mono text-xs font-bold tracking-[0.14em] text-orange-400"
@@ -79,7 +79,9 @@ export function HomeBuyingOptions({ s }: { s: PublicStrings }) {
                           </p>
                         </div>
 
-                        <Icon className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" aria-hidden="true" />
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] lg:h-auto lg:w-auto lg:border-0 lg:bg-transparent">
+                          <Icon className="h-4 w-4 shrink-0 text-orange-300 lg:h-5 lg:w-5 lg:text-slate-400" aria-hidden="true" />
+                        </span>
                       </div>
                     </Reveal>
                   </li>
@@ -90,7 +92,7 @@ export function HomeBuyingOptions({ s }: { s: PublicStrings }) {
         </div>
 
         {/* Required honesty note — present, and part of the composition. */}
-        <Reveal delay={60} className="mt-10 border-t border-white/10 pt-6">
+        <Reveal delay={60} className="mt-7 border-t border-white/10 pt-5 sm:mt-9 sm:pt-6">
           <p className="max-w-3xl text-[11px] leading-relaxed text-slate-400">
             <span className="font-semibold text-slate-300">{s.t("home.options.disclaimerLabel")}</span>{" "}
             {s.t("home.options.disclaimer")}
