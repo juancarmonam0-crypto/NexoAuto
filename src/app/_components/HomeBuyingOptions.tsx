@@ -7,11 +7,8 @@ import { Reveal } from "@/app/_components/Reveal";
 /**
  * BUYING OPTIONS — the navy ledger.
  *
- * The third grammar on the page, and deliberately not a card grid: these four
- * options are not four independent things to compare, they are four entries in
- * one list of ways to pay. So they are set as a ledger — a numbered index, a
- * hairline rule, a title and one line of mechanism — inside the brand's navy
- * slab.
+ * On mobile the options are swipeable cards with mandatory snap. On desktop
+ * they retain the compact numbered-ledger treatment inside the navy slab.
  *
  * WHY THE SLAB IS SHAPED THIS WAY
  * It is full-bleed with a large radius on its top edge and pulled 32px up over
@@ -55,14 +52,17 @@ export function HomeBuyingOptions({ s }: { s: PublicStrings }) {
           </Reveal>
 
           <div className="lg:col-span-7">
-            <ul className="border-b border-white/10">
+            <ul className="snap-rail -mx-4 flex gap-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6 lg:mx-0 lg:block lg:overflow-visible lg:border-b lg:border-white/10 lg:px-0 lg:pb-0">
               {BUYING_OPTIONS.map((option, index) => {
                 const Icon = option.icon;
 
                 return (
-                  <li key={option.titleKey}>
+                  <li
+                    key={option.titleKey}
+                    className="snap-item min-h-44 basis-[calc(100%-2.75rem)] shrink-0 rounded-2xl border border-white/15 bg-white/[0.06] p-5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.8)] sm:basis-[calc(100%-4rem)] sm:p-6 lg:min-h-0 lg:basis-auto lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none"
+                  >
                     <Reveal delay={index * 80}>
-                      <div className="grid grid-cols-[2.25rem_1fr_auto] items-start gap-4 border-t border-white/10 py-5 sm:grid-cols-[2.75rem_1fr_auto] sm:gap-5 sm:py-6">
+                      <div className="grid grid-cols-[2.25rem_1fr_auto] items-start gap-4 sm:grid-cols-[2.75rem_1fr_auto] sm:gap-5 lg:border-t lg:border-white/10 lg:py-6">
                         <span
                           aria-hidden="true"
                           className="pt-0.5 font-mono text-xs font-bold tracking-[0.14em] text-orange-400"
