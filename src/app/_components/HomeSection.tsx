@@ -28,7 +28,13 @@ export function SectionMarker({ index, label, tone = "light" }: SectionMarkerPro
   const dark = tone === "dark";
 
   return (
-    <p className="flex items-center gap-3">
+    <p
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 ${
+        dark
+          ? "border-orange-400/25 bg-orange-400/10"
+          : "border-orange-200 bg-orange-50/90 dark:border-orange-400/25 dark:bg-orange-400/10"
+      }`}
+    >
       <span
         className={`font-mono text-[11px] font-bold tracking-[0.2em] ${
           dark ? "text-orange-400" : "text-orange-600 dark:text-orange-400"
@@ -36,13 +42,10 @@ export function SectionMarker({ index, label, tone = "light" }: SectionMarkerPro
       >
         {index}
       </span>
-      <span
-        aria-hidden="true"
-        className={`h-px w-7 shrink-0 ${dark ? "bg-white/25" : "bg-slate-300 dark:bg-white/20"}`}
-      />
+      <span aria-hidden="true" className={`h-1 w-1 shrink-0 rounded-full ${dark ? "bg-orange-300/70" : "bg-orange-400"}`} />
       <span
         className={`font-mono text-[11px] font-bold uppercase tracking-[0.18em] ${
-          dark ? "text-slate-400" : "text-slate-500 dark:text-slate-400"
+          dark ? "text-orange-100/85" : "text-orange-700 dark:text-orange-100/85"
         }`}
       >
         {label}

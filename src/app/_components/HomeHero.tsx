@@ -65,7 +65,7 @@ function riseStep(ms: number): CSSProperties {
  */
 export function HomeHero({ s, ctaHref = "/inventory" }: { s: PublicStrings; ctaHref?: string }) {
   return (
-    <section className="relative isolate overflow-hidden border-b border-slate-200/70 bg-white dark:border-white/10 dark:bg-[var(--brand-navy-950)]">
+    <section className="nexo-hero-frame relative isolate mx-3 mt-3 overflow-hidden bg-white sm:mx-5 sm:mt-5 xl:mx-auto xl:max-w-[74rem] dark:bg-[var(--brand-navy-950)]">
       {/* --- The approved artwork is the section background at every size ---- */}
       <div className="absolute inset-0">
         <picture className="block h-full w-full">
@@ -142,7 +142,7 @@ export function HomeHero({ s, ctaHref = "/inventory" }: { s: PublicStrings; ctaH
               {/* Primary action: one accent colour on the whole page. */}
               <Link
                 href={ctaHref}
-                className="group/cta inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-orange-600 px-6 text-sm font-semibold text-white shadow-[0_14px_30px_-16px_rgba(234,88,12,0.9)] transition-colors hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2"
+                className="group/cta inline-flex h-12 items-center justify-center gap-2 rounded-[14px] bg-orange-600 px-6 text-sm font-semibold text-white shadow-[0_14px_30px_-16px_rgba(233,111,32,0.9)] transition-colors hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 <span>{s.t("home.hero.primaryCta")}</span>
                 <ArrowRight
@@ -153,7 +153,7 @@ export function HomeHero({ s, ctaHref = "/inventory" }: { s: PublicStrings; ctaH
 
               <Link
                 href={`#${SECTION_IDS.journey}`}
-                className="inline-flex h-12 items-center justify-center rounded-xl border border-slate-300 bg-white/80 px-6 text-sm font-semibold text-[var(--brand-navy-900)] backdrop-blur-sm transition-colors hover:bg-white dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+                className="inline-flex h-12 items-center justify-center rounded-[14px] border border-slate-300 bg-white/85 px-6 text-sm font-semibold text-[var(--brand-navy-900)] shadow-sm backdrop-blur-sm transition-colors hover:bg-white dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
               >
                 {s.t("home.hero.secondaryCta")}
               </Link>

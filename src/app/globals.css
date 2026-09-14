@@ -25,22 +25,22 @@
 
 @layer base {
   :root {
-    --brand-navy-950: #04142b;
-    --brand-navy-900: #0b2545;
-    --brand-navy-800: #123058;
-    --brand-navy-700: #17396a;
-    --brand-orange-600: #ea580c;
-    --brand-orange-500: #f97316;
-    --brand-orange-400: #fb923c;
+    --brand-navy-950: #061426;
+    --brand-navy-900: #0a2038;
+    --brand-navy-800: #102d4a;
+    --brand-navy-700: #183c61;
+    --brand-orange-600: #e96f20;
+    --brand-orange-500: #f47b25;
+    --brand-orange-400: #fb954f;
 
     /* Semantic surfaces. Components reference these through the utilities below
        so a surface is defined once, not re-derived per component. */
-    --surface-page: #f7f9fc;
+    --surface-page: #f4f7fb;
     --surface-card: #ffffff;
-    --surface-subtle: #f1f5f9;
-    --surface-border: #e2e8f0;
-    --surface-ink: #0f172a;
-    --surface-muted: #64748b;
+    --surface-subtle: #edf2f8;
+    --surface-border: #dce4ed;
+    --surface-ink: #101827;
+    --surface-muted: #66758a;
 
     /* The one dark surface the brand uses for structural bands. */
     --panel-bg: #0b2545;
@@ -135,7 +135,9 @@
 .surface-card {
   background-color: var(--surface-card);
   border: 1px solid var(--surface-border);
-  box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+  box-shadow:
+    0 1px 2px 0 rgba(6, 20, 38, 0.04),
+    0 12px 30px -26px rgba(6, 20, 38, 0.32);
 }
 
 .dark .surface-card {
@@ -165,8 +167,8 @@
   background-color: var(--surface-card);
   border: 1px solid var(--surface-border);
   box-shadow:
-    0 1px 2px 0 rgba(15, 23, 42, 0.04),
-    0 18px 40px -28px rgba(15, 23, 42, 0.28);
+    0 1px 2px 0 rgba(6, 20, 38, 0.05),
+    0 22px 48px -30px rgba(6, 20, 38, 0.34);
   transition:
     box-shadow var(--dur-base) var(--ease-brand),
     transform var(--dur-base) var(--ease-brand);
@@ -256,6 +258,29 @@
   background-color: var(--brand-navy-900);
   background-image: linear-gradient(160deg, var(--brand-navy-800) 0%, var(--brand-navy-950) 100%);
   color: #ffffff;
+}
+
+/* The public hero uses the existing artwork as a background, framed like the
+   large rounded brand plates used across the Nexo family. */
+.nexo-hero-frame {
+  border: 1px solid color-mix(in srgb, var(--brand-navy-900) 12%, transparent);
+  border-radius: 1.75rem;
+  box-shadow:
+    0 2px 4px rgba(6, 20, 38, 0.05),
+    0 30px 65px -38px rgba(6, 20, 38, 0.48);
+}
+
+.dark .nexo-hero-frame {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.35),
+    0 32px 70px -38px rgba(0, 0, 0, 0.85);
+}
+
+@media (min-width: 640px) {
+  .nexo-hero-frame {
+    border-radius: 2.25rem;
+  }
 }
 
 .dark .brand-panel {
@@ -408,4 +433,3 @@ textarea {
     transform: none !important;
   }
 }
-

@@ -69,7 +69,7 @@ export function HomeJourney({ s }: { s: PublicStrings }) {
               return (
                 <li
                   key={step.titleKey}
-                  className="snap-item surface-plate basis-[calc(100%-3.5rem)] shrink-0 rounded-2xl border-t-2 border-t-orange-500 p-5 sm:basis-[calc(100%-5rem)] sm:p-6 lg:min-h-0 lg:basis-auto lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none dark:lg:bg-transparent dark:lg:shadow-none"
+                  className="snap-item surface-plate basis-[calc(100%-3.5rem)] shrink-0 rounded-[24px] border-t-2 border-t-orange-500 p-5 sm:basis-[calc(100%-5rem)] sm:p-6 lg:min-h-0 lg:basis-auto lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none dark:lg:bg-transparent dark:lg:shadow-none"
                 >
                   <Reveal delay={index * 90} className="relative flex gap-4 lg:block">
                     <span className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white font-mono text-sm font-extrabold text-[var(--brand-navy-900)] shadow-[0_1px_2px_rgba(15,23,42,0.06)] lg:mx-auto dark:border-white/15 dark:bg-[var(--brand-navy-950)] dark:text-white">

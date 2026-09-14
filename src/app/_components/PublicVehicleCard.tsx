@@ -78,7 +78,7 @@ export function VehicleCard({
 
   const isRow = layout === "row";
   const isFeatured = emphasis === "featured";
-  const radius = isFeatured ? "rounded-[26px]" : "rounded-[22px]";
+  const radius = isFeatured ? "rounded-[30px]" : "rounded-[26px]";
 
   return (
     <article
