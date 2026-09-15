@@ -199,9 +199,15 @@ export function VehicleCard({
       {/*
         Stretched link: one accessible name for the whole card, no nested
         interactive elements, and a focus ring that wraps the card.
+
+        `prefetch={true}` is intentional. Vehicle detail is dynamic, so the
+        default App Router policy would wait for a server render on click. Nexo
+        Auto has a deliberately small inventory; fully prefetching visible car
+        details trades a handful of background reads for near-instant taps.
       */}
       <Link
         href={`/inventory/${vehicle.id}`}
+        prefetch={true}
         className={`absolute inset-0 ${radius} focus-visible:outline-2 focus-visible:outline-offset-2`}
       >
         <span className="sr-only">

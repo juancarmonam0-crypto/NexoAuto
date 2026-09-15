@@ -136,6 +136,11 @@ export async function listPublicInventory(
  * Returning null (rather than an error) is deliberate: "this car is not for
  * sale or does not exist" is the same answer to a public visitor, and it keeps
  * sold or unlisted inventory indistinguishable from a wrong URL.
+ *
+ * The listing and photo reads are independent approved public views, so they
+ * run concurrently. They used to form a serial two-query waterfall on every
+ * vehicle-detail render, which meant a shopper paid both database round trips
+ * before the page could resolve.
  */
 export async function getPublicVehicle(
   vehicleId: string,
@@ -143,20 +148,22 @@ export async function getPublicVehicle(
 ): Promise<PublicVehicleDetail | null> {
   if (!vehicleId || vehicleId.length > 64) return null;
 
-  const rows = await client.$queryRaw<PublicVehicleListing[]>(Prisma.sql`
-    SELECT ${LISTING_SELECT} ${LISTING_FROM}
-    WHERE l."id" = ${vehicleId}
-    LIMIT 1
-  `);
+  const [rows, photos] = await Promise.all([
+    client.$queryRaw<PublicVehicleListing[]>(Prisma.sql`
+      SELECT ${LISTING_SELECT} ${LISTING_FROM}
+      WHERE l."id" = ${vehicleId}
+      LIMIT 1
+    `),
+    client.$queryRaw<PublicVehiclePhoto[]>(Prisma.sql`
+      SELECT "id", "vehicleId", "url", "alt", "sortOrder", "isPrimary"
+      FROM "public_vehicle_photos"
+      WHERE "vehicleId" = ${vehicleId}
+      ORDER BY "sortOrder" ASC
+    `),
+  ]);
+
   const listing = rows[0];
   if (!listing) return null;
-
-  const photos = await client.$queryRaw<PublicVehiclePhoto[]>(Prisma.sql`
-    SELECT "id", "vehicleId", "url", "alt", "sortOrder", "isPrimary"
-    FROM "public_vehicle_photos"
-    WHERE "vehicleId" = ${vehicleId}
-    ORDER BY "sortOrder" ASC
-  `);
 
   return { ...listing, photos };
 }
